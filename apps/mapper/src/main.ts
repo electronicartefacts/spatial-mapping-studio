@@ -348,7 +348,11 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   brushStroke = new Map();
   renderer.domElement.setPointerCapture(event.pointerId);
   const hit = hitAt(event);
-  if (hit) brushStroke.set(hit.primitive.primitiveId, new Set(brushFaces(hit.primitive, event)));
+  if (hit)
+    brushStroke.set(
+      hit.primitive.primitiveId,
+      new Set([hit.face, ...brushFaces(hit.primitive, event)]),
+    );
 });
 renderer.domElement.addEventListener('pointermove', (event) => {
   updateBrushPreview(event);
@@ -356,6 +360,7 @@ renderer.domElement.addEventListener('pointermove', (event) => {
   const hit = hitAt(event);
   if (!hit) return;
   const faces = brushStroke.get(hit.primitive.primitiveId) ?? new Set<number>();
+  faces.add(hit.face);
   brushFaces(hit.primitive, event).forEach((face) => faces.add(face));
   brushStroke.set(hit.primitive.primitiveId, faces);
 });
