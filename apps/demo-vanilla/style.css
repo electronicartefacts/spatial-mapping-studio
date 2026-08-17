@@ -29,13 +29,20 @@ h1 {
 }
 .layout {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
   min-height: 65vh;
   border-bottom: 2px solid #18191c;
 }
 spatial-artefact {
+  display: block;
+  min-width: 0;
   min-height: 65vh;
   background: #20232a;
+}
+spatial-artefact canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
 }
 aside {
   padding: 1.5rem;
