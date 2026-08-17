@@ -114,6 +114,10 @@
             </button>
             <div class="app-menu" data-menu="view" role="menu" hidden>
               <button role="menuitem" data-action="reset-camera"><span>Reset camera</span></button>
+              <button role="menuitem" data-action="camera-front"><span>Front view</span></button>
+              <button role="menuitem" data-action="camera-right"><span>Right view</span></button>
+              <button role="menuitem" data-action="camera-top"><span>Top view</span></button>
+              <span class="menu-divider" role="separator"></span>
               <button role="menuitem" data-action="frame-selection">
                 <span>Frame selection</span><kbd>F</kbd>
               </button>
@@ -215,6 +219,11 @@
         <section id="viewport" aria-label="3D GLB viewport">
           <div class="stage-meta" aria-hidden="true">
             <span>SPATIAL STAGE</span><span>ORBIT · PAN · ZOOM</span>
+          </div>
+          <div class="view-orbit" role="group" aria-label="Camera orientation">
+            <button data-camera-view="front" title="Front view" aria-pressed="false">FR</button>
+            <button data-camera-view="right" title="Right view" aria-pressed="false">RI</button>
+            <button data-camera-view="top" title="Top view" aria-pressed="false">TP</button>
           </div>
           <svg id="lasso-path" hidden aria-hidden="true"><polyline></polyline></svg>
           <div id="drop-hint">

@@ -76,6 +76,7 @@ let raf = 0;
 let topologyReady = false;
 let topologyGeneration = 0;
 type ViewMode = 'lit' | 'unlit' | 'wireframe' | 'selection';
+type CameraView = 'front' | 'right' | 'top';
 const originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
 type BenchmarkSnapshot = {
   load?: Record<string, number>;
@@ -163,7 +164,28 @@ function frame() {
     .copy(sphere.center)
     .add(new THREE.Vector3(0.8, 0.6, 1).normalize().multiplyScalar(sphere.radius * 3));
   controls.target.copy(sphere.center);
+  document.querySelectorAll<HTMLButtonElement>('[data-camera-view]').forEach((button) => {
+    button.setAttribute('aria-pressed', 'false');
+  });
   controls.update();
+  render();
+}
+
+function setCameraView(view: CameraView) {
+  if (!root) return;
+  const sphere = new THREE.Box3().setFromObject(root).getBoundingSphere(new THREE.Sphere());
+  const direction: Record<CameraView, THREE.Vector3> = {
+    front: new THREE.Vector3(0, 0, 1),
+    right: new THREE.Vector3(1, 0, 0),
+    top: new THREE.Vector3(0, 1, 0),
+  };
+  camera.position.copy(sphere.center).add(direction[view].multiplyScalar(sphere.radius * 3));
+  controls.target.copy(sphere.center);
+  document.querySelectorAll<HTMLButtonElement>('[data-camera-view]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.cameraView === view));
+  });
+  controls.update();
+  status.textContent = `${view[0]!.toUpperCase()}${view.slice(1)} view.`;
   render();
 }
 
@@ -798,6 +820,7 @@ const runAction = (action: string) => {
     return;
   }
   if (action === 'command-palette') return openCommandPalette();
+  if (action.startsWith('camera-')) return setCameraView(action.slice(7) as CameraView);
   if (action === 'frame-selection') return frameSelection();
   if (action === 'isolate') return setIsolation(true);
   if (action === 'show-all') return setIsolation(false);
@@ -826,6 +849,9 @@ const commandDefinitions = [
   ['mode-brush', 'Brush selection', 'Select'],
   ['mode-lasso', 'Lasso selection', 'Select'],
   ['frame-selection', 'Frame selection', 'View'],
+  ['camera-front', 'Front view', 'View'],
+  ['camera-right', 'Right view', 'View'],
+  ['camera-top', 'Top view', 'View'],
   ['isolate', 'Isolate selection', 'View'],
   ['show-all', 'Show all', 'View'],
   ['toggle-inspector', 'Toggle inspector', 'Window'],
@@ -864,6 +890,9 @@ document.querySelectorAll<HTMLButtonElement>('[data-menu-trigger]').forEach((tri
     menu.hidden = !willOpen;
     trigger.setAttribute('aria-expanded', String(willOpen));
   };
+});
+document.querySelectorAll<HTMLButtonElement>('[data-camera-view]').forEach((button) => {
+  button.onclick = () => setCameraView(button.dataset.cameraView as CameraView);
 });
 document.addEventListener('click', (event) => {
   const commandAction = (event.target as HTMLElement).closest<HTMLElement>('[data-command-action]')

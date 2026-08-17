@@ -678,6 +678,39 @@ li > button:first-child {
   letter-spacing: 0.14em;
   pointer-events: none;
 }
+.view-orbit {
+  position: absolute;
+  z-index: 6;
+  top: 132px;
+  right: 26px;
+  display: grid;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid rgba(214, 222, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(8, 10, 18, 0.54);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+}
+.view-orbit button {
+  width: 28px;
+  min-height: 25px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #aeb6cf;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.view-orbit button:hover,
+.view-orbit button[aria-pressed='true'] {
+  background: rgba(114, 134, 255, 0.25);
+  color: #fff;
+  transform: none;
+}
 #lasso-path {
   position: absolute;
   z-index: 4;
