@@ -276,6 +276,23 @@
           </section>
           <section class="inspector-section">
             <p class="panel-kicker">MAPPED REGIONS</p>
+            <div class="outliner-tools">
+              <label class="sr-only" for="region-search">Search mapped regions</label>
+              <input
+                id="region-search"
+                type="search"
+                placeholder="Search regions"
+                autocomplete="off"
+              />
+              <button
+                id="focus-active-region"
+                class="icon-button"
+                title="Frame active region"
+                disabled
+              >
+                <span aria-hidden="true">⌖</span><span class="sr-only">Frame active region</span>
+              </button>
+            </div>
             <ul id="regions" aria-label="Mapped regions"></ul>
             <section id="region-inspector" hidden aria-label="Region metadata">
               <p class="panel-kicker">EDIT REGION</p>
@@ -289,6 +306,22 @@
         </aside>
       </section>
       <div id="context-menu" class="context-menu" role="menu" hidden></div>
+      <dialog id="command-palette" class="command-palette" aria-label="Command palette">
+        <form method="dialog">
+          <div class="command-search-row">
+            <span aria-hidden="true">⌘</span>
+            <label class="sr-only" for="command-search">Search commands</label>
+            <input
+              id="command-search"
+              type="search"
+              placeholder="Search actions…"
+              autocomplete="off"
+            />
+            <kbd>Esc</kbd>
+          </div>
+          <div id="command-results" class="command-results" aria-label="Commands"></div>
+        </form>
+      </dialog>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

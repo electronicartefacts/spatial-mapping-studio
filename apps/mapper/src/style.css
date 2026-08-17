@@ -963,6 +963,79 @@ li > button:first-child {
 .app-menu[hidden] {
   display: none;
 }
+.command-palette {
+  width: min(510px, calc(100vw - 32px));
+  margin: 16vh auto 0;
+  padding: 7px;
+  border: 1px solid rgba(207, 216, 255, 0.24);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(31, 35, 54, 0.98), rgba(9, 10, 17, 0.98));
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.68),
+    inset 0 1px rgba(255, 255, 255, 0.08);
+  color: #eef0fb;
+  backdrop-filter: blur(28px);
+}
+.command-palette::backdrop {
+  background: rgba(1, 2, 7, 0.58);
+  backdrop-filter: blur(3px);
+}
+.command-search-row {
+  display: grid;
+  grid-template-columns: 25px 1fr auto;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px 10px;
+  border-bottom: 1px solid rgba(218, 225, 255, 0.12);
+  color: #aeb9ff;
+}
+.command-search-row input {
+  min-width: 0;
+  margin: 0;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  box-shadow: none;
+}
+.command-search-row input:focus {
+  outline: 0;
+}
+.command-search-row kbd {
+  color: #8991a9;
+  font-size: 0.58rem;
+}
+.command-results {
+  display: grid;
+  max-height: min(50vh, 390px);
+  padding-top: 5px;
+  overflow: auto;
+}
+.command-results button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 39px;
+  margin: 0;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #eef0fb;
+  font-size: 0.73rem;
+  text-align: left;
+}
+.command-results button:hover {
+  background: rgba(141, 157, 255, 0.17);
+  transform: none;
+}
+.command-results small {
+  color: #9098af;
+  font-size: 0.57rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 .header-actions {
   display: flex;
   align-items: center;
@@ -1233,6 +1306,42 @@ body.inspector-hidden .context-bar {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid rgba(218, 225, 255, 0.1);
+}
+.outliner-tools {
+  display: grid;
+  grid-template-columns: 1fr 30px;
+  gap: 6px;
+  margin: 8px 0;
+}
+.outliner-tools input {
+  min-width: 0;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 8px;
+  font-size: 0.65rem;
+}
+.outliner-tools .icon-button {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border-radius: 7px;
+}
+.inspector #regions li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px;
+  margin: 4px 0;
+}
+.inspector #regions li > button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.inspector #regions li.is-active > button:first-child {
+  border-color: rgba(137, 155, 255, 0.55);
+  background: rgba(102, 121, 255, 0.18);
 }
 .inspector #regions:empty::after {
   content: 'No mapped regions yet.';

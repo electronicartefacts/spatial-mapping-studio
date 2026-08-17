@@ -30,6 +30,11 @@ const selectedCount = $('#selection-count');
 const undoButton = $('#undo') as HTMLButtonElement;
 const redoButton = $('#redo') as HTMLButtonElement;
 const inspector = $('#region-inspector');
+const regionSearch = $('#region-search') as HTMLInputElement;
+const focusActiveRegionButton = $('#focus-active-region') as HTMLButtonElement;
+const commandPalette = $('#command-palette') as HTMLDialogElement;
+const commandSearch = $('#command-search') as HTMLInputElement;
+const commandResults = $('#command-results');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -218,6 +223,7 @@ function setViewMode(next: ViewMode) {
 function editRegion(region: SpatialRegion) {
   activeRegionId = region.id;
   inspector.hidden = false;
+  focusActiveRegionButton.disabled = region.selector.type !== 'triangles';
   $<HTMLInputElement>('#edit-region-id').value = region.id;
   $<HTMLInputElement>('#edit-region-label').value = region.label;
   $<HTMLInputElement>('#edit-region-tags').value = region.tags.join(', ');
@@ -248,9 +254,14 @@ function commitRegionMetadata() {
 }
 
 function renderRegions() {
+  const query = regionSearch.value.trim().toLocaleLowerCase();
+  const visibleRegions = regions.filter((region) =>
+    [region.id, region.label, ...region.tags].join(' ').toLocaleLowerCase().includes(query),
+  );
   list.replaceChildren(
-    ...regions.map((region) => {
+    ...visibleRegions.map((region) => {
       const item = document.createElement('li');
+      item.className = region.id === activeRegionId ? 'is-active' : '';
       const edit = document.createElement('button');
       edit.textContent = `${region.label} · ${region.tags.join(', ') || 'untagged'}`;
       edit.onclick = () => editRegion(region);
@@ -261,6 +272,7 @@ function renderRegions() {
         if (activeRegionId === region.id) {
           activeRegionId = undefined;
           inspector.hidden = true;
+          focusActiveRegionButton.disabled = true;
         }
         syncProject();
       };
@@ -268,6 +280,26 @@ function renderRegions() {
       return item;
     }),
   );
+  if (!visibleRegions.length && query) list.textContent = 'No matching regions.';
+}
+
+function focusRegion(region: SpatialRegion) {
+  const runtime = modelController.model?.runtime;
+  if (!runtime || region.selector.type !== 'triangles') return;
+  const selector = region.selector;
+  const matching = [...runtime.primitives.values()].find(
+    (primitive) => primitive.selectorMesh === selector.mesh,
+  );
+  if (!matching) {
+    status.textContent = 'This region no longer matches an imported mesh.';
+    return;
+  }
+  selectionController.replaceActiveFaces(
+    runtime,
+    new Map([[matching.primitiveId, selector.faces]]),
+  );
+  frameSelection();
+  status.textContent = `Framed ${region.label}.`;
 }
 
 function renderModelInfo() {
@@ -716,6 +748,7 @@ const runAction = (action: string) => {
     document.body.classList.toggle('inspector-hidden');
     return;
   }
+  if (action === 'command-palette') return openCommandPalette();
   if (action === 'frame-selection') return frameSelection();
   if (action === 'isolate') return setIsolation(true);
   if (action === 'show-all') return setIsolation(false);
@@ -729,6 +762,48 @@ const runAction = (action: string) => {
   const target = targets[action];
   if (target) document.querySelector<HTMLElement>(target)?.click();
 };
+const commandDefinitions = [
+  ['open-glb', 'Open GLB', 'File'],
+  ['open-manifest', 'Open artifact.json', 'File'],
+  ['try-example', 'Try example', 'File'],
+  ['export', 'Export artifact.json', 'File'],
+  ['undo', 'Undo', 'Edit'],
+  ['redo', 'Redo', 'Edit'],
+  ['clear', 'Clear selection', 'Edit'],
+  ['mode-face', 'Face selection', 'Select'],
+  ['mode-mesh', 'Mesh selection', 'Select'],
+  ['mode-primitive', 'Primitive selection', 'Select'],
+  ['mode-connected', 'Connected surfaces', 'Select'],
+  ['mode-brush', 'Brush selection', 'Select'],
+  ['mode-lasso', 'Lasso selection', 'Select'],
+  ['frame-selection', 'Frame selection', 'View'],
+  ['isolate', 'Isolate selection', 'View'],
+  ['show-all', 'Show all', 'View'],
+  ['toggle-inspector', 'Toggle inspector', 'Window'],
+] as const;
+function renderCommandResults() {
+  const query = commandSearch.value.trim().toLocaleLowerCase();
+  const matching = commandDefinitions.filter(([, title, category]) =>
+    `${title} ${category}`.toLocaleLowerCase().includes(query),
+  );
+  commandResults.replaceChildren(
+    ...matching.map(([action, title, category]) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.commandAction = action;
+      button.innerHTML = `<span>${title}</span><small>${category}</small>`;
+      return button;
+    }),
+  );
+  if (!matching.length) commandResults.textContent = 'No matching commands.';
+}
+function openCommandPalette() {
+  closeMenus();
+  if (!commandPalette.open) commandPalette.showModal();
+  commandSearch.value = '';
+  renderCommandResults();
+  requestAnimationFrame(() => commandSearch.focus());
+}
 document.querySelectorAll<HTMLButtonElement>('[data-menu-trigger]').forEach((trigger) => {
   trigger.onclick = (event) => {
     event.stopPropagation();
@@ -742,6 +817,13 @@ document.querySelectorAll<HTMLButtonElement>('[data-menu-trigger]').forEach((tri
   };
 });
 document.addEventListener('click', (event) => {
+  const commandAction = (event.target as HTMLElement).closest<HTMLElement>('[data-command-action]')
+    ?.dataset.commandAction;
+  if (commandAction) {
+    commandPalette.close();
+    runAction(commandAction);
+    return;
+  }
   const action = (event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset
     .action;
   if (action) runAction(action);
@@ -749,7 +831,17 @@ document.addEventListener('click', (event) => {
   $('#context-menu').hidden = true;
 });
 document.addEventListener('keydown', (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'k') {
+    event.preventDefault();
+    if (commandPalette.open) commandPalette.close();
+    else openCommandPalette();
+    return;
+  }
   if (event.key === 'Escape') {
+    if (commandPalette.open) {
+      commandPalette.close();
+      return;
+    }
     closeMenus();
     $('#context-menu').hidden = true;
     if (selectedFaceCount()) selectionController.clear();
@@ -773,6 +865,12 @@ document.addEventListener('keydown', (event) => {
               : undefined;
   if (action) runAction(action);
 });
+commandSearch.addEventListener('input', renderCommandResults);
+regionSearch.addEventListener('input', renderRegions);
+focusActiveRegionButton.onclick = () => {
+  const region = regions.find((item) => item.id === activeRegionId);
+  if (region) focusRegion(region);
+};
 const contextMenu = $('#context-menu');
 renderer.domElement.addEventListener('contextmenu', (event) => {
   event.preventDefault();
