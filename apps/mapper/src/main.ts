@@ -11,10 +11,11 @@ import {
   createWorkspaceProject,
   deserializeWorkspaceProject,
   serializeWorkspaceProject,
+  type SelectionSet,
 } from '@electronic-artefacts/spatial-project-core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { ModelController } from './model/ModelController';
+import { ModelController, type RuntimeModelMap } from './model/ModelController';
 import { SelectionController, type SelectionMode } from './selection/SelectionController';
 import type { CanonicalPrimitiveId } from '@electronic-artefacts/spatial-importers';
 import { SelectionOverlayRenderer } from './selection/SelectionOverlayRenderer';
@@ -42,6 +43,11 @@ const controls = new OrbitControls(camera, renderer.domElement);
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const overlayRenderer = new SelectionOverlayRenderer();
+const regionOverlayRenderer = new SelectionOverlayRenderer({
+  color: 0x6684ff,
+  opacity: 0.56,
+  renderOrder: 9,
+});
 const modelController = new ModelController();
 const compute = new SpatialComputeClient();
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -224,6 +230,7 @@ function editRegion(region: SpatialRegion) {
   activeRegionId = region.id;
   inspector.hidden = false;
   focusActiveRegionButton.disabled = region.selector.type !== 'triangles';
+  previewRegion(region);
   $<HTMLInputElement>('#edit-region-id').value = region.id;
   $<HTMLInputElement>('#edit-region-label').value = region.label;
   $<HTMLInputElement>('#edit-region-tags').value = region.tags.join(', ');
@@ -265,6 +272,12 @@ function renderRegions() {
       const edit = document.createElement('button');
       edit.textContent = `${region.label} · ${region.tags.join(', ') || 'untagged'}`;
       edit.onclick = () => editRegion(region);
+      const preview = document.createElement('button');
+      preview.className = 'region-preview';
+      preview.textContent = '◉';
+      preview.title = `Preview ${region.label}`;
+      preview.setAttribute('aria-label', `Preview ${region.label}`);
+      preview.onclick = () => editRegion(region);
       const remove = document.createElement('button');
       remove.textContent = 'Remove';
       remove.onclick = () => {
@@ -273,17 +286,20 @@ function renderRegions() {
           activeRegionId = undefined;
           inspector.hidden = true;
           focusActiveRegionButton.disabled = true;
+          regionOverlayRenderer.clear();
         }
         syncProject();
       };
-      item.append(edit, ' ', remove);
+      item.append(edit, preview, remove);
       return item;
     }),
   );
   if (!visibleRegions.length && query) list.textContent = 'No matching regions.';
 }
 
-function focusRegion(region: SpatialRegion) {
+function selectionForRegion(
+  region: SpatialRegion,
+): { runtime: RuntimeModelMap; selection: SelectionSet } | undefined {
   const runtime = modelController.model?.runtime;
   if (!runtime || region.selector.type !== 'triangles') return;
   const selector = region.selector;
@@ -294,9 +310,41 @@ function focusRegion(region: SpatialRegion) {
     status.textContent = 'This region no longer matches an imported mesh.';
     return;
   }
-  selectionController.replaceActiveFaces(
+  return {
     runtime,
-    new Map([[matching.primitiveId, selector.faces]]),
+    selection: {
+      id: `region-preview:${region.id}`,
+      source: 'manual',
+      targets: [
+        {
+          mesh: matching.selectorMesh,
+          canonicalMeshId: matching.meshId,
+          canonicalPrimitiveId: matching.primitiveId,
+          canonicalMaterialId: matching.materialId,
+          faces: selector.faces,
+        },
+      ],
+    },
+  };
+}
+
+function previewRegion(region: SpatialRegion) {
+  const mapped = selectionForRegion(region);
+  regionOverlayRenderer.clear();
+  if (mapped) regionOverlayRenderer.rebuild(mapped.runtime, mapped.selection);
+  render();
+}
+
+function focusRegion(region: SpatialRegion) {
+  const mapped = selectionForRegion(region);
+  if (!mapped) return;
+  selectionController.replaceActiveFaces(
+    mapped.runtime,
+    new Map(
+      mapped.selection.targets.flatMap((target) =>
+        target.canonicalPrimitiveId ? [[target.canonicalPrimitiveId, target.faces] as const] : [],
+      ),
+    ),
   );
   frameSelection();
   status.textContent = `Framed ${region.label}.`;
@@ -383,6 +431,7 @@ async function open(file: File) {
     const previous = modelController.detach();
     if (previous) scene.remove(previous);
     overlayRenderer.clear();
+    regionOverlayRenderer.clear();
     const loaded = await modelController.load(file, payloadHash, objectUrl);
     root = loaded.root;
     scene.add(root);

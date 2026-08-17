@@ -1328,7 +1328,7 @@ body.inspector-hidden .context-bar {
 }
 .inspector #regions li {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr 27px auto;
   gap: 5px;
   margin: 4px 0;
 }
@@ -1338,6 +1338,15 @@ body.inspector-hidden .context-bar {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
+}
+.inspector #regions .region-preview {
+  width: 27px;
+  min-height: 27px;
+  margin: 0;
+  padding: 0;
+  border-radius: 7px;
+  color: #9dacff;
+  text-align: center;
 }
 .inspector #regions li.is-active > button:first-child {
   border-color: rgba(137, 155, 255, 0.55);

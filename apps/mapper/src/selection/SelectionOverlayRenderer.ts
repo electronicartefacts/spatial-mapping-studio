@@ -7,6 +7,10 @@ import type { CanonicalPrimitiveId } from '@electronic-artefacts/spatial-importe
 export class SelectionOverlayRenderer {
   private overlays: THREE.Mesh[] = [];
 
+  constructor(
+    private readonly style: { color?: number; opacity?: number; renderOrder?: number } = {},
+  ) {}
+
   rebuild(runtime: RuntimeModelMap | undefined, selection: SelectionSet | undefined) {
     const started = performance.now();
     this.clear();
@@ -33,14 +37,14 @@ export class SelectionOverlayRenderer {
           new THREE.Float32BufferAttribute(vertices, 3),
         ),
         new THREE.MeshBasicMaterial({
-          color: 0xffc400,
+          color: this.style.color ?? 0xffc400,
           side: THREE.DoubleSide,
           depthWrite: false,
           transparent: true,
-          opacity: 0.82,
+          opacity: this.style.opacity ?? 0.82,
         }),
       );
-      overlay.renderOrder = 10;
+      overlay.renderOrder = this.style.renderOrder ?? 10;
       mesh.add(overlay);
       this.overlays.push(overlay);
     }
