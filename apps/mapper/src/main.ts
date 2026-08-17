@@ -18,6 +18,7 @@ import { ModelController } from './model/ModelController';
 import { SelectionController, type SelectionMode } from './selection/SelectionController';
 import type { CanonicalPrimitiveId } from '@electronic-artefacts/spatial-importers';
 import { SelectionOverlayRenderer } from './selection/SelectionOverlayRenderer';
+import { SpatialComputeClient } from './compute/SpatialComputeClient';
 import './style.css';
 
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
@@ -37,6 +38,7 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const overlayRenderer = new SelectionOverlayRenderer();
 const modelController = new ModelController();
+const compute = new SpatialComputeClient();
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 viewport.append(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x252832, 2));
@@ -53,17 +55,26 @@ let projectHistory: ProjectHistory | undefined;
 let activeRegionId: string | undefined;
 let selectionMode: SelectionMode = 'face';
 let brushStroke: Map<CanonicalPrimitiveId, Set<number>> | undefined;
+let brushPending: Promise<void>[] = [];
+let brushRequestVersion = 0;
 let brushRadiusPx = 36;
 let raf = 0;
+let topologyReady = false;
+let topologyGeneration = 0;
 type BenchmarkSnapshot = {
   load?: Record<string, number>;
   overlayMs?: number;
   brushMs?: number;
   raycastMs?: number;
+  topologyReadyMs?: number;
 };
 type BenchmarkWindow = Window & {
   __spatialBenchmark?: BenchmarkSnapshot;
-  __spatialBenchmarkMeasureBrush?: (x: number, y: number, radius: number) => number | undefined;
+  __spatialBenchmarkMeasureBrush?: (
+    x: number,
+    y: number,
+    radius: number,
+  ) => Promise<number | undefined>;
   __spatialBenchmarkMeasureOverlay?: (faces: number) => number | undefined;
 };
 const benchmark = window as BenchmarkWindow;
@@ -197,6 +208,7 @@ function renderModelInfo() {
     return;
   }
   info.hidden = false;
+  $('#topology-status').textContent = topologyReady ? 'Topology ready' : 'Topology preparing…';
   $('#model-summary').textContent =
     `${loaded.canonical.source.name} · ${loaded.canonical.source.fileSize.toLocaleString()} bytes · ${loaded.canonical.nodes.length} nodes · ${loaded.canonical.meshes.length} meshes · ${loaded.canonical.primitives.length} primitives · ${loaded.canonical.materials.length} materials · SHA-256 verified`;
   diagnostics.replaceChildren(
@@ -216,10 +228,12 @@ function renderModelInfo() {
     ? 'No canonical primitive runtime mapping is available.'
     : '';
   material.title = material.disabled ? 'No canonical material runtime mapping is available.' : '';
-  for (const mode of ['connected', 'brush', 'erase'] as const)
+  for (const mode of ['brush', 'erase'] as const)
     $<HTMLButtonElement>(`[data-selection-mode="${mode}"]`).disabled = !hasRuntimePrimitives;
-  $<HTMLButtonElement>('#grow-selection').disabled = !hasRuntimePrimitives;
-  $<HTMLButtonElement>('#shrink-selection').disabled = !hasRuntimePrimitives;
+  $<HTMLButtonElement>('[data-selection-mode="connected"]').disabled =
+    !hasRuntimePrimitives || !topologyReady;
+  $<HTMLButtonElement>('#grow-selection').disabled = !hasRuntimePrimitives || !topologyReady;
+  $<HTMLButtonElement>('#shrink-selection').disabled = !hasRuntimePrimitives || !topologyReady;
 }
 
 function currentManifest(): SpatialArtefact | undefined {
@@ -241,6 +255,8 @@ async function open(file: File) {
   objectUrl = URL.createObjectURL(file);
   status.textContent = `Loading ${file.name} locally…`;
   try {
+    const generation = ++topologyGeneration;
+    topologyReady = false;
     payloadHash = await sha256(await file.arrayBuffer());
     projectHistory = new ProjectHistory(
       createWorkspaceProject({
@@ -277,9 +293,34 @@ async function open(file: File) {
       'Ready. SHA-256 fingerprint attached. Switch to Select and click triangles.';
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     benchmark.__spatialBenchmark = { ...benchmark.__spatialBenchmark, load: loaded.timings };
+    void prepareTopology(loaded.computeGeometry, generation, performance.now());
   } catch {
     payloadHash = undefined;
     status.textContent = 'This GLB could not be loaded.';
+  }
+}
+
+async function prepareTopology(
+  geometry: import('./compute/protocol').ComputePrimitiveGeometry[],
+  generation: number,
+  started: number,
+) {
+  try {
+    await compute.dispose();
+    for (const primitive of geometry) await compute.register(primitive);
+    await Promise.all(geometry.map((primitive) => compute.buildTopology(primitive.primitiveId)));
+    if (generation !== topologyGeneration) return;
+    topologyReady = true;
+    benchmark.__spatialBenchmark = {
+      ...benchmark.__spatialBenchmark,
+      topologyReadyMs: performance.now() - started,
+    };
+    renderModelInfo();
+  } catch {
+    if (generation !== topologyGeneration) return;
+    topologyReady = false;
+    renderModelInfo();
+    status.textContent = 'Topology processing failed. Basic selection remains available.';
   }
 }
 
@@ -314,51 +355,56 @@ function hitAt(event: PointerEvent | MouseEvent) {
   return { primitive, face: hit.faceIndex };
 }
 
-function brushFaces(
+function queueBrushCandidates(
   primitive: import('./model/ModelController').RuntimePrimitive,
   event: PointerEvent,
 ) {
-  const started = performance.now();
-  const geometry = primitive.mesh.geometry as THREE.BufferGeometry;
-  const position = geometry.getAttribute('position');
-  const index = geometry.getIndex();
+  const stroke = brushStroke;
+  if (!stroke) return;
+  const version = ++brushRequestVersion;
   const rect = renderer.domElement.getBoundingClientRect();
-  const point = new THREE.Vector3();
-  const candidates: number[] = [];
-  for (let face = 0; face < Math.floor((index?.count ?? position.count) / 3); face += 1) {
-    point.set(0, 0, 0);
-    for (let offset = 0; offset < 3; offset += 1) {
-      const vertex = index ? index.getX(face * 3 + offset) : face * 3 + offset;
-      point.add(
-        new THREE.Vector3(position.getX(vertex), position.getY(vertex), position.getZ(vertex)),
-      );
-    }
-    point
-      .multiplyScalar(1 / 3)
-      .applyMatrix4(primitive.mesh.matrixWorld)
-      .project(camera);
-    const x = rect.left + ((point.x + 1) / 2) * rect.width;
-    const y = rect.top + ((1 - point.y) / 2) * rect.height;
-    if (Math.hypot(event.clientX - x, event.clientY - y) <= brushRadiusPx) candidates.push(face);
-  }
-  benchmark.__spatialBenchmark = {
-    ...benchmark.__spatialBenchmark,
-    brushMs: performance.now() - started,
-  };
-  return candidates;
+  const viewProjection = new THREE.Matrix4().multiplyMatrices(
+    camera.projectionMatrix,
+    camera.matrixWorldInverse,
+  );
+  const pending = compute
+    .brush(
+      primitive.primitiveId,
+      [event.clientX - rect.left, event.clientY - rect.top],
+      brushRadiusPx,
+      [rect.width, rect.height],
+      primitive.mesh.matrixWorld.toArray(),
+      viewProjection.toArray(),
+    )
+    .then((result) => {
+      if (stroke !== brushStroke || version < brushRequestVersion - 1) return;
+      const faces = stroke.get(primitive.primitiveId) ?? new Set<number>();
+      result.faces.forEach((face) => faces.add(face));
+      stroke.set(primitive.primitiveId, faces);
+      benchmark.__spatialBenchmark = { ...benchmark.__spatialBenchmark, brushMs: result.wallMs };
+    })
+    .catch(() => undefined);
+  brushPending.push(pending);
 }
 
-benchmark.__spatialBenchmarkMeasureBrush = (x, y, radius) => {
+benchmark.__spatialBenchmarkMeasureBrush = async (x, y, radius) => {
   const hit = hitAt(new PointerEvent('pointermove', { clientX: x, clientY: y }));
   if (!hit) return;
-  const previousRadius = brushRadiusPx;
-  brushRadiusPx = radius;
-  const faces = brushFaces(
-    hit.primitive,
-    new PointerEvent('pointermove', { clientX: x, clientY: y }),
+  const rect = renderer.domElement.getBoundingClientRect();
+  const viewProjection = new THREE.Matrix4().multiplyMatrices(
+    camera.projectionMatrix,
+    camera.matrixWorldInverse,
   );
-  brushRadiusPx = previousRadius;
-  return faces.length;
+  const result = await compute.brush(
+    hit.primitive.primitiveId,
+    [x - rect.left, y - rect.top],
+    radius,
+    [rect.width, rect.height],
+    hit.primitive.mesh.matrixWorld.toArray(),
+    viewProjection.toArray(),
+  );
+  benchmark.__spatialBenchmark = { ...benchmark.__spatialBenchmark, brushMs: result.wallMs };
+  return result.faces.length;
 };
 benchmark.__spatialBenchmarkMeasureOverlay = (faces) => {
   const primitive = modelController.model?.runtime.primitives.values().next().value;
@@ -401,8 +447,7 @@ function pick(event: MouseEvent) {
   else if (selectionMode === 'primitive') selectionController.selectPrimitive(primitive);
   else if (selectionMode === 'material')
     selectionController.selectMaterial(primitive, modelController.model!.runtime);
-  else if (selectionMode === 'connected')
-    selectionController.selectConnected(primitive, face, modelController.model!.runtime);
+  else if (selectionMode === 'connected') void selectConnected(primitive, face);
   else selectionController.selectFace(primitive, face);
 }
 
@@ -414,11 +459,8 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   brushStroke = new Map();
   renderer.domElement.setPointerCapture(event.pointerId);
   const hit = hitAt(event);
-  if (hit)
-    brushStroke.set(
-      hit.primitive.primitiveId,
-      new Set([hit.face, ...brushFaces(hit.primitive, event)]),
-    );
+  if (hit) brushStroke.set(hit.primitive.primitiveId, new Set([hit.face]));
+  if (hit) queueBrushCandidates(hit.primitive, event);
 });
 renderer.domElement.addEventListener('pointermove', (event) => {
   updateBrushPreview(event);
@@ -427,12 +469,14 @@ renderer.domElement.addEventListener('pointermove', (event) => {
   if (!hit) return;
   const faces = brushStroke.get(hit.primitive.primitiveId) ?? new Set<number>();
   faces.add(hit.face);
-  brushFaces(hit.primitive, event).forEach((face) => faces.add(face));
   brushStroke.set(hit.primitive.primitiveId, faces);
+  queueBrushCandidates(hit.primitive, event);
 });
 renderer.domElement.addEventListener('pointerleave', () => ($('#brush-preview').hidden = true));
-renderer.domElement.addEventListener('pointerup', (event) => {
+renderer.domElement.addEventListener('pointerup', async (event) => {
   if (!brushStroke) return;
+  await Promise.all(brushPending);
+  brushPending = [];
   if (modelController.model)
     selectionController.applyStroke(
       modelController.model.runtime,
@@ -474,12 +518,47 @@ document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((b
 $('#brush-radius').addEventListener('input', (event) => {
   brushRadiusPx = Number((event.target as HTMLInputElement).value);
 });
-$('#grow-selection').onclick = () => {
-  if (modelController.model) selectionController.grow(modelController.model.runtime);
-};
-$('#shrink-selection').onclick = () => {
-  if (modelController.model) selectionController.shrink(modelController.model.runtime);
-};
+async function selectConnected(
+  primitive: import('./model/ModelController').RuntimePrimitive,
+  face: number,
+) {
+  if (!topologyReady) return;
+  try {
+    const result = await compute.connected(primitive.primitiveId, face);
+    selectionController.selectConnected(primitive, result.faces);
+  } catch {
+    status.textContent = 'Topology processing failed. Basic selection remains available.';
+  }
+}
+async function transformSelection(kind: 'grow' | 'shrink') {
+  const runtime = modelController.model?.runtime;
+  const active = selectionController.active();
+  if (!runtime || !active || !topologyReady) return;
+  try {
+    const results = await Promise.all(
+      active.targets.flatMap((target) =>
+        target.canonicalPrimitiveId
+          ? [
+              (kind === 'grow' ? compute.grow : compute.shrink)(
+                target.canonicalPrimitiveId as CanonicalPrimitiveId,
+                target.faces,
+              ),
+            ]
+          : [],
+      ),
+    );
+    const mapped = new Map<string, number[]>();
+    active.targets.forEach((target, index) => {
+      if (target.canonicalPrimitiveId)
+        mapped.set(target.canonicalPrimitiveId, results[index]?.faces ?? target.faces);
+    });
+    selectionController.replaceActiveFaces(runtime, mapped);
+  } catch {
+    status.textContent = 'Topology processing failed. Basic selection remains available.';
+  }
+}
+$('#grow-selection').onclick = () => void transformSelection('grow');
+$('#shrink-selection').onclick = () => void transformSelection('shrink');
 $('#reset-camera').onclick = frame;
 $('#try-example').onclick = async () => {
   try {

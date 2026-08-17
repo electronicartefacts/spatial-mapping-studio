@@ -66,4 +66,18 @@ Here, “normalized GLB” means a valid import with stable canonical identities
 
 Three.js is an implementation detail: manifests contain glTF-oriented semantic selectors, never Three.js UUIDs. Core capability is WebGL2/WebGL; enhanced paths may add WebGPU, OPFS, workers, and File System Access without becoming required.
 
+## Compute boundary
+
+Heavy authoring geometry work is isolated behind `SpatialComputeClient`. The main thread retains GLTFLoader, canonical/runtime mapping, camera, UI, project history and overlay rendering. A Vite module Worker receives only copied typed position/index buffers and canonical primitive IDs; it owns its geometry registry and topology index. It returns face IDs for Connected, Grow, Shrink and Brush queries, never Three.js objects or a WorkspaceProject.
+
+```text
+MAIN THREAD                         COMPUTE WORKER
+GLTFLoader / CanonicalModel          Geometry Registry
+Three.js / camera / UI     →         TopologyIndex
+WorkspaceProject / overlay           Connected / Grow / Shrink / Brush
+       SpatialComputeClient  ←        typed messages and face IDs
+```
+
+Model rendering and Face/Mesh/Primitive/Material selection become available before topology. Connected, Grow and Shrink remain disabled while `Topology preparing…` is displayed, then become available when the current model generation reports ready. Loading a later model increments the generation and stale responses are ignored; the worker registry is disposed before new geometry is registered.
+
 The V0 runtime renders on demand. Files remain in browser memory unless the user explicitly downloads a manifest or project. Local storage is convenience state, not permanent storage.

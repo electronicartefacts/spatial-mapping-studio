@@ -7,12 +7,9 @@ import {
   type CanonicalPrimitiveId,
   type ImportDiagnostic,
 } from '@electronic-artefacts/spatial-importers';
-import {
-  createTopologyIndex,
-  type TopologyIndex,
-} from '@electronic-artefacts/spatial-project-core';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { ComputePrimitiveGeometry } from '../compute/protocol';
 
 export type RuntimePrimitive = {
   primitiveId: CanonicalPrimitiveId;
@@ -27,7 +24,6 @@ export type RuntimeModelMap = {
   primitives: Map<CanonicalPrimitiveId, RuntimePrimitive>;
   primitiveByObject: Map<THREE.Object3D, RuntimePrimitive>;
   materials: Map<CanonicalMaterialId, THREE.Material>;
-  topology: Map<CanonicalPrimitiveId, TopologyIndex>;
 };
 export type LoadedModel = {
   canonical: CanonicalModel;
@@ -35,6 +31,7 @@ export type LoadedModel = {
   runtime: RuntimeModelMap;
   diagnostics: ImportDiagnostic[];
   timings: LoadTimings;
+  computeGeometry: ComputePrimitiveGeometry[];
 };
 
 /** Local performance breakdown exposed to the Studio benchmark; it is never sent anywhere. */
@@ -83,8 +80,9 @@ export class ModelController {
         canonicalImportMs,
         gltfParseMs,
         runtimeMappingMs,
-        topologyMs: mapped.topologyMs,
+        topologyMs: 0,
       },
+      computeGeometry: mapped.computeGeometry,
     };
     if (mapped.runtime.primitives.size !== imported.model.primitives.length) {
       this.current.diagnostics.push({
@@ -110,16 +108,15 @@ export class ModelController {
     canonical: CanonicalModel,
     root: THREE.Object3D,
     associations: Map<object, Association> | undefined,
-  ): { runtime: RuntimeModelMap; topologyMs: number } {
+  ): { runtime: RuntimeModelMap; computeGeometry: ComputePrimitiveGeometry[] } {
     const runtime: RuntimeModelMap = {
       nodeObjects: new Map(),
       meshObjects: new Map(),
       primitives: new Map(),
       primitiveByObject: new Map(),
       materials: new Map(),
-      topology: new Map(),
     };
-    let topologyMs = 0;
+    const computeGeometry: ComputePrimitiveGeometry[] = [];
     root.traverse((object) => {
       const association = associations?.get(object);
       if (association?.nodes !== undefined)
@@ -146,29 +143,24 @@ export class ModelController {
       };
       runtime.primitives.set(primitiveId, item);
       runtime.primitiveByObject.set(mesh, item);
-      const topologyStarted = performance.now();
-      runtime.topology.set(primitiveId, topologyFor(mesh.geometry as THREE.BufferGeometry));
-      topologyMs += performance.now() - topologyStarted;
+      computeGeometry.push(computeGeometryFor(primitiveId, mesh.geometry as THREE.BufferGeometry));
       if (primitive.materialId && mesh.material instanceof THREE.Material)
         runtime.materials.set(primitive.materialId, mesh.material);
     });
-    return { runtime, topologyMs };
+    return { runtime, computeGeometry };
   }
 }
 
-function topologyFor(geometry: THREE.BufferGeometry): TopologyIndex {
+function computeGeometryFor(
+  primitiveId: CanonicalPrimitiveId,
+  geometry: THREE.BufferGeometry,
+): ComputePrimitiveGeometry {
   const position = geometry.getAttribute('position');
   const indexed = geometry.getIndex();
-  const triangles: string[][] = [];
-  for (let face = 0; face < Math.floor((indexed?.count ?? position.count) / 3); face += 1) {
-    triangles.push(
-      [0, 1, 2].map((offset) => {
-        const vertex = indexed ? indexed.getX(face * 3 + offset) : face * 3 + offset;
-        return indexed
-          ? `index:${vertex}`
-          : `position:${position.getX(vertex)},${position.getY(vertex)},${position.getZ(vertex)}`;
-      }),
-    );
-  }
-  return createTopologyIndex(triangles);
+  const positions = new Float32Array(position.array.length);
+  positions.set(position.array as ArrayLike<number>);
+  const indices = new Uint32Array(indexed?.count ?? position.count);
+  for (let offset = 0; offset < indices.length; offset += 1)
+    indices[offset] = indexed ? indexed.getX(offset) : offset;
+  return { primitiveId, positions, indices };
 }

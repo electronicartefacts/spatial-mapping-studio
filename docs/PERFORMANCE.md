@@ -65,3 +65,17 @@ Observed cost ranking:
 5. **Triangle-selector export** — serialization/format scaling; sub-millisecond at 100k, but 589 KB makes the manifest less portable.
 
 **Decision:** do not add BVH, Workers, a different selector or an overlay optimisation during this discovery milestone. For Milestone 8, first move topology construction and brush candidate work off the interaction path (Worker/transferable design), then evaluate a spatial acceleration structure against the same fixtures. Keep Spatial Artefact 0.1 unchanged; start a separate format-evolution investigation only when real projects regularly exceed roughly 50k selected faces.
+
+## Milestone 8 — worker comparison
+
+The Worker pipeline separates **Basic TTI** (model visible, camera and Face/Mesh/Primitive/Material available) from **Advanced Tools Ready** (topology ready, Connected/Grow/Shrink enabled). The Worker owns topology and query state; the main thread transfers copied typed geometry buffers and receives only face IDs.
+
+| Triangles | M7 synchronous TTI | M8 Basic TTI | M8 Advanced Tools Ready | M8 main-thread topology build |
+| --------: | -----------------: | -----------: | ----------------------: | ----------------------------: |
+|      100k |             132 ms |       178 ms |                  201 ms |                          0 ms |
+|      250k |             460 ms |       235 ms |                  397 ms |                          0 ms |
+|      500k |             848 ms |        85 ms |                  772 ms |                          0 ms |
+
+The wall-clock topology work remains comparable (500k: 772 ms) because the pure algorithm is intentionally unchanged. The product result is that this work no longer occupies the main-thread import/mapping phase: camera, UI and basic selection can be used while topology is preparing. The benchmark's Worker Brush query measured 21.8–22.1 ms median/p95 at 500k versus the M7 main-thread 56.3–57.2 ms scan. It remains a linear query, but its work is isolated from pointer handling.
+
+The benchmark's aggregate long-task observer still reports 254 ms across the complete mixed run; it is not attributable solely to topology after the move. A physical-device profiling trace remains appropriate before presenting a mobile latency guarantee. BVH remains deferred: warm raycast performance is unchanged and the next evidence gate is a dedicated spatial-acceleration comparison, not an assumption.
