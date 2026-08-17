@@ -57,6 +57,9 @@ let selectionMode: SelectionMode = 'face';
 let brushStroke: Map<CanonicalPrimitiveId, Set<number>> | undefined;
 let brushPending: Promise<void>[] = [];
 let brushRequestVersion = 0;
+let lassoPoints: [number, number][] | undefined;
+let lassoOperation: 'replace' | 'add' | 'subtract' = 'replace';
+let lassoGeneration = 0;
 let brushRadiusPx = 36;
 let raf = 0;
 let topologyReady = false;
@@ -97,6 +100,13 @@ function syncSelectionVisuals() {
   benchmark.__spatialBenchmark = { ...benchmark.__spatialBenchmark, overlayMs };
   selectedCount.textContent = `${count} selected faces`;
   selectedCount.dataset.faces = String(count);
+  const targets = selectionController.active()?.targets.length ?? 0;
+  const available = [...(modelController.model?.runtime.primitives.values() ?? [])].reduce(
+    (total, primitive) => total + Math.floor((primitive.mesh.geometry.getIndex()?.count ?? 0) / 3),
+    0,
+  );
+  $('#selection-stats').textContent =
+    `${targets} targets · ${available ? Math.round((count / available) * 100) : 0}% of model triangles`;
   render();
 }
 
@@ -228,7 +238,7 @@ function renderModelInfo() {
     ? 'No canonical primitive runtime mapping is available.'
     : '';
   material.title = material.disabled ? 'No canonical material runtime mapping is available.' : '';
-  for (const mode of ['brush', 'erase'] as const)
+  for (const mode of ['brush', 'erase', 'lasso'] as const)
     $<HTMLButtonElement>(`[data-selection-mode="${mode}"]`).disabled = !hasRuntimePrimitives;
   $<HTMLButtonElement>('[data-selection-mode="connected"]').disabled =
     !hasRuntimePrimitives || !topologyReady;
@@ -452,9 +462,19 @@ function pick(event: MouseEvent) {
 }
 
 renderer.domElement.addEventListener('click', (event) => {
-  if (selectionMode !== 'brush' && selectionMode !== 'erase') pick(event);
+  if (selectionMode !== 'brush' && selectionMode !== 'erase' && selectionMode !== 'lasso')
+    pick(event);
 });
 renderer.domElement.addEventListener('pointerdown', (event) => {
+  if (selectionMode === 'lasso') {
+    const rect = renderer.domElement.getBoundingClientRect();
+    lassoPoints = [[event.clientX - rect.left, event.clientY - rect.top]];
+    lassoOperation = event.altKey ? 'subtract' : event.shiftKey ? 'add' : 'replace';
+    $('#lasso-path').hidden = false;
+    renderer.domElement.setPointerCapture(event.pointerId);
+    controls.enabled = false;
+    return;
+  }
   if (selectionMode !== 'brush' && selectionMode !== 'erase') return;
   brushStroke = new Map();
   renderer.domElement.setPointerCapture(event.pointerId);
@@ -463,6 +483,31 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   if (hit) queueBrushCandidates(hit.primitive, event);
 });
 renderer.domElement.addEventListener('pointermove', (event) => {
+  const cursor = $('#cursor-hud');
+  const rect = viewport.getBoundingClientRect();
+  cursor.hidden = false;
+  cursor.style.left = `${event.clientX - rect.left}px`;
+  cursor.style.top = `${event.clientY - rect.top}px`;
+  const title = cursor.querySelector('strong')!;
+  const detail = cursor.querySelector('span')!;
+  title.textContent = selectionMode.toUpperCase();
+  detail.textContent =
+    selectionMode === 'lasso'
+      ? 'Draw a closed area'
+      : selectionMode === 'brush'
+        ? 'Paint surfaces'
+        : selectionMode === 'erase'
+          ? 'Remove surfaces'
+          : 'Click a surface';
+  if (lassoPoints) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    lassoPoints.push([event.clientX - rect.left, event.clientY - rect.top]);
+    $('#lasso-path polyline').setAttribute(
+      'points',
+      lassoPoints.map((point) => point.join(',')).join(' '),
+    );
+    return;
+  }
   updateBrushPreview(event);
   if (!brushStroke) return;
   const hit = hitAt(event);
@@ -472,8 +517,60 @@ renderer.domElement.addEventListener('pointermove', (event) => {
   brushStroke.set(hit.primitive.primitiveId, faces);
   queueBrushCandidates(hit.primitive, event);
 });
-renderer.domElement.addEventListener('pointerleave', () => ($('#brush-preview').hidden = true));
+renderer.domElement.addEventListener('pointerleave', () => {
+  $('#brush-preview').hidden = true;
+  $('#cursor-hud').hidden = true;
+});
 renderer.domElement.addEventListener('pointerup', async (event) => {
+  if (lassoPoints) {
+    const polygon = lassoPoints;
+    const request = ++lassoGeneration;
+    lassoPoints = undefined;
+    $('#lasso-path').hidden = true;
+    controls.enabled = true;
+    const runtime = modelController.model?.runtime;
+    if (runtime && polygon.length > 2) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const vp = new THREE.Matrix4()
+        .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+        .toArray();
+      const results = await Promise.all(
+        [...runtime.primitives.values()].map(
+          async (primitive) =>
+            [
+              primitive.primitiveId,
+              (
+                await compute.lasso(
+                  primitive.primitiveId,
+                  polygon,
+                  [rect.width, rect.height],
+                  primitive.mesh.matrixWorld.toArray(),
+                  vp,
+                )
+              ).faces,
+            ] as const,
+        ),
+      );
+      if (request !== lassoGeneration || runtime !== modelController.model?.runtime) return;
+      const current =
+        lassoOperation === 'replace'
+          ? new Map<string, number[]>()
+          : new Map(
+              selectionController
+                .active()
+                ?.targets.map((t) => [t.canonicalPrimitiveId!, t.faces]) ?? [],
+            );
+      results.forEach(([id, faces]) => {
+        const set = new Set(current.get(id) ?? []);
+        faces.forEach((face) => (lassoOperation === 'subtract' ? set.delete(face) : set.add(face)));
+        current.set(id, [...set]);
+      });
+      selectionController.replaceActiveFaces(runtime, current);
+    }
+    if (renderer.domElement.hasPointerCapture(event.pointerId))
+      renderer.domElement.releasePointerCapture(event.pointerId);
+    return;
+  }
   if (!brushStroke) return;
   await Promise.all(brushPending);
   brushPending = [];
@@ -509,6 +606,7 @@ $('#manifest-input').addEventListener('change', async (event) => {
 document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((button) => {
   button.onclick = () => {
     selectionMode = button.dataset.selectionMode as SelectionMode;
+    document.body.dataset.tool = selectionMode;
     document.body.classList.toggle('erase-active', selectionMode === 'erase');
     document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((modeButton) => {
       modeButton.setAttribute('aria-pressed', String(modeButton === button));
@@ -572,6 +670,9 @@ $('#try-example').onclick = async () => {
   }
 };
 $('#clear-selection').onclick = () => selectionController.clear();
+$('#invert-selection').onclick = () => {
+  if (modelController.model) selectionController.invert(modelController.model.runtime);
+};
 undoButton.onclick = () => {
   projectHistory?.undo();
   syncProject();
@@ -581,6 +682,13 @@ redoButton.onclick = () => {
   syncProject();
 };
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && lassoPoints) {
+    lassoGeneration += 1;
+    lassoPoints = undefined;
+    $('#lasso-path').hidden = true;
+    controls.enabled = true;
+    return;
+  }
   if (!(event.metaKey || event.ctrlKey)) return;
   if (event.key.toLowerCase() === 'z') {
     event.preventDefault();
@@ -642,6 +750,11 @@ $('#save-region').onclick = () => {
     );
   }
   syncProject();
+  const created = regions.find((region) => region.id === id);
+  if (created) {
+    editRegion(created);
+    $<HTMLInputElement>('#edit-region-id').focus();
+  }
   status.textContent = `Saved ${label}. Selection remains active for refinement.`;
 };
 $('#export-manifest').onclick = () => {

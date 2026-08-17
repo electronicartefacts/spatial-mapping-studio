@@ -84,6 +84,47 @@ self.onmessage = ({ data }: MessageEvent<ComputeRequest>) => {
       });
       return;
     }
+    if (data.type === 'lasso') {
+      const inside = (x: number, y: number) =>
+        data.polygon.reduce((value, point, index) => {
+          const next = data.polygon[(index + 1) % data.polygon.length]!;
+          return (
+            value !==
+            (point[1] > y !== next[1] > y &&
+              x < ((next[0] - point[0]) * (y - point[1])) / (next[1] - point[1]) + point[0])
+          );
+        }, false);
+      const faces: number[] = [];
+      const mul = (m: number[], x: number, y: number, z: number, w: number) => [
+        m[0]! * x + m[4]! * y + m[8]! * z + m[12]! * w,
+        m[1]! * x + m[5]! * y + m[9]! * z + m[13]! * w,
+        m[2]! * x + m[6]! * y + m[10]! * z + m[14]! * w,
+        m[3]! * x + m[7]! * y + m[11]! * z + m[15]! * w,
+      ];
+      for (let face = 0; face < primitive.indices.length / 3; face += 1) {
+        let x = 0,
+          y = 0,
+          z = 0;
+        for (let p = 0; p < 3; p++) {
+          const v = primitive.indices[face * 3 + p]! * 3;
+          x += primitive.positions[v]!;
+          y += primitive.positions[v + 1]!;
+          z += primitive.positions[v + 2]!;
+        }
+        const world = mul(data.model, x / 3, y / 3, z / 3, 1);
+        const clip = mul(data.viewProjection, world[0]!, world[1]!, world[2]!, world[3]!);
+        const px = ((clip[0]! / clip[3]! + 1) / 2) * data.viewport[0]!,
+          py = ((1 - clip[1]! / clip[3]!) / 2) * data.viewport[1]!;
+        if (inside(px, py)) faces.push(face);
+      }
+      respond({
+        type: 'faces',
+        requestId: data.requestId,
+        faces,
+        wallMs: performance.now() - started,
+      });
+      return;
+    }
     const index = topology.get(data.primitiveId);
     if (!index) throw new Error('Topology is still preparing.');
     const faces =

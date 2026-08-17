@@ -64,6 +64,15 @@ export class SpatialComputeClient {
       viewProjection,
     });
   }
+  lasso(
+    primitiveId: CanonicalPrimitiveId,
+    polygon: [number, number][],
+    viewport: [number, number],
+    model: number[],
+    viewProjection: number[],
+  ) {
+    return this.faces({ type: 'lasso', primitiveId, polygon, viewport, model, viewProjection });
+  }
   dispose() {
     return this.request({ type: 'dispose' });
   }
