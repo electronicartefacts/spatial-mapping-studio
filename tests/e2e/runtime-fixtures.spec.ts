@@ -9,7 +9,7 @@ test('canonical Primitive and shared Material modes operate on real GLB fixtures
 }) => {
   await page.goto('/');
   await page.locator('#glb-input').setInputFiles(fixture('multi-primitive.glb'));
-  await expect(page.locator('#status')).toContainText('SHA-256 fingerprint attached');
+  await expect(page.locator('#topology-status')).toContainText(/Topology (preparing|ready)/);
   await expect(page.locator('#model-summary')).toContainText('2 primitives');
   const canvas = page.locator('#viewport canvas');
   const box = await canvas.boundingBox();
@@ -24,6 +24,8 @@ test('canonical Primitive and shared Material modes operate on real GLB fixtures
   await page.getByRole('button', { name: 'Primitive' }).click();
   await clickModel();
   await expect(page.locator('#selection-count')).toHaveText('1 selected faces');
+  await expect(page.locator('#topology-status')).toHaveText('Topology ready');
+  await expect(page.getByRole('button', { name: 'Connected' })).toBeEnabled();
   await page.locator('#glb-input').setInputFiles(fixture('shared-material.glb'));
   await expect(page.locator('#status')).toContainText('SHA-256 fingerprint attached');
   await page.getByRole('button', { name: 'Material' }).click();

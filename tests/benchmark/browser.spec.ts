@@ -29,7 +29,13 @@ async function load(page: import('@playwright/test').Page, triangles: number) {
     };
     return state.__spatialBenchmark?.load ?? {};
   });
-  return { ttiMs, ...metrics };
+  await expect(page.locator('#topology-status')).toHaveText('Topology ready', { timeout: 120_000 });
+  const topologyReadyMs = await page.evaluate(
+    () =>
+      (window as Window & { __spatialBenchmark?: { topologyReadyMs?: number } }).__spatialBenchmark
+        ?.topologyReadyMs ?? 0,
+  );
+  return { ttiMs, topologyReadyMs, ...metrics };
 }
 
 async function boxFor(page: import('@playwright/test').Page) {
@@ -53,6 +59,7 @@ test('production desktop: cold load, raycast, overlay and brush matrix', async (
     for (let run = 0; run < 3; run += 1) loads.push(await load(page, triangles));
     const names = [
       'ttiMs',
+      'topologyReadyMs',
       'fileReadMs',
       'canonicalImportMs',
       'gltfParseMs',
