@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ModelController } from './model/ModelController';
 import { SelectionController, type SelectionMode } from './selection/SelectionController';
+import type { CanonicalPrimitiveId } from '@electronic-artefacts/spatial-importers';
 import { SelectionOverlayRenderer } from './selection/SelectionOverlayRenderer';
 import './style.css';
 
@@ -51,6 +52,7 @@ let regions: SpatialRegion[] = [];
 let projectHistory: ProjectHistory | undefined;
 let activeRegionId: string | undefined;
 let selectionMode: SelectionMode = 'face';
+let brushStroke: Map<CanonicalPrimitiveId, Set<number>> | undefined;
 let raf = 0;
 
 const selectedFaceCount = () =>
@@ -196,6 +198,10 @@ function renderModelInfo() {
     ? 'No canonical primitive runtime mapping is available.'
     : '';
   material.title = material.disabled ? 'No canonical material runtime mapping is available.' : '';
+  for (const mode of ['connected', 'brush', 'erase'] as const)
+    $<HTMLButtonElement>(`[data-selection-mode="${mode}"]`).disabled = !hasRuntimePrimitives;
+  $<HTMLButtonElement>('#grow-selection').disabled = !hasRuntimePrimitives;
+  $<HTMLButtonElement>('#shrink-selection').disabled = !hasRuntimePrimitives;
 }
 
 function currentManifest(): SpatialArtefact | undefined {
@@ -257,7 +263,7 @@ async function open(file: File) {
   }
 }
 
-function pick(event: PointerEvent) {
+function hitAt(event: PointerEvent | MouseEvent) {
   if (!root) return;
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.set(
@@ -274,14 +280,52 @@ function pick(event: PointerEvent) {
     status.textContent = 'This runtime mesh has no canonical GLB primitive mapping.';
     return;
   }
+  return { primitive, face: hit.faceIndex };
+}
+
+function pick(event: MouseEvent) {
+  const hit = hitAt(event);
+  if (!hit) return;
+  const { primitive, face } = hit;
   if (selectionMode === 'mesh') selectionController.selectMesh(primitive);
   else if (selectionMode === 'primitive') selectionController.selectPrimitive(primitive);
   else if (selectionMode === 'material')
     selectionController.selectMaterial(primitive, modelController.model!.runtime);
-  else selectionController.selectFace(primitive, hit.faceIndex);
+  else if (selectionMode === 'connected')
+    selectionController.selectConnected(primitive, face, modelController.model!.runtime);
+  else selectionController.selectFace(primitive, face);
 }
 
-renderer.domElement.addEventListener('click', pick);
+renderer.domElement.addEventListener('click', (event) => {
+  if (selectionMode !== 'brush' && selectionMode !== 'erase') pick(event);
+});
+renderer.domElement.addEventListener('pointerdown', (event) => {
+  if (selectionMode !== 'brush' && selectionMode !== 'erase') return;
+  brushStroke = new Map();
+  renderer.domElement.setPointerCapture(event.pointerId);
+  const hit = hitAt(event);
+  if (hit) brushStroke.set(hit.primitive.primitiveId, new Set([hit.face]));
+});
+renderer.domElement.addEventListener('pointermove', (event) => {
+  if (!brushStroke) return;
+  const hit = hitAt(event);
+  if (!hit) return;
+  const faces = brushStroke.get(hit.primitive.primitiveId) ?? new Set<number>();
+  faces.add(hit.face);
+  brushStroke.set(hit.primitive.primitiveId, faces);
+});
+renderer.domElement.addEventListener('pointerup', (event) => {
+  if (!brushStroke) return;
+  if (modelController.model)
+    selectionController.applyStroke(
+      modelController.model.runtime,
+      brushStroke,
+      selectionMode === 'erase',
+    );
+  brushStroke = undefined;
+  if (renderer.domElement.hasPointerCapture(event.pointerId))
+    renderer.domElement.releasePointerCapture(event.pointerId);
+});
 viewport.addEventListener('dragover', (event) => event.preventDefault());
 viewport.addEventListener('drop', (event) => {
   event.preventDefault();
@@ -309,6 +353,12 @@ document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((b
     });
   };
 });
+$('#grow-selection').onclick = () => {
+  if (modelController.model) selectionController.grow(modelController.model.runtime);
+};
+$('#shrink-selection').onclick = () => {
+  if (modelController.model) selectionController.shrink(modelController.model.runtime);
+};
 $('#reset-camera').onclick = frame;
 $('#clear-selection').onclick = () => selectionController.clear();
 undoButton.onclick = () => {

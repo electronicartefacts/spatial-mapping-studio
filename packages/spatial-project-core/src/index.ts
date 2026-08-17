@@ -4,6 +4,8 @@ import {
   type SpatialRegion,
 } from '@electronic-artefacts/spatial-artefact-schema';
 
+export * from './topology.js';
+
 export type ProjectSourceAsset = {
   name: string;
   format: 'glb';

@@ -41,7 +41,18 @@
             <button data-selection-mode="mesh" aria-pressed="false">Mesh</button>
             <button data-selection-mode="primitive" aria-pressed="false" disabled>Primitive</button>
             <button data-selection-mode="material" aria-pressed="false" disabled>Material</button>
+            <button data-selection-mode="connected" aria-pressed="false" disabled>Connected</button>
+            <button data-selection-mode="brush" aria-pressed="false" disabled>Brush</button>
+            <button data-selection-mode="erase" aria-pressed="false" disabled>Erase</button>
+            <button
+              disabled
+              title="Lasso is deferred until visible-geometry occlusion is implemented."
+            >
+              Lasso (planned)
+            </button>
           </div>
+          <button id="grow-selection" disabled>Grow</button>
+          <button id="shrink-selection" disabled>Shrink</button>
           <label>ID<input id="region-id" value="region-1" /></label
           ><label>Label<input id="region-label" value="Selected surface" /></label
           ><label>Tags<input id="region-tags" placeholder="material, function" /></label>

@@ -7,6 +7,10 @@ import {
   type CanonicalPrimitiveId,
   type ImportDiagnostic,
 } from '@electronic-artefacts/spatial-importers';
+import {
+  createTopologyIndex,
+  type TopologyIndex,
+} from '@electronic-artefacts/spatial-project-core';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -23,6 +27,7 @@ export type RuntimeModelMap = {
   primitives: Map<CanonicalPrimitiveId, RuntimePrimitive>;
   primitiveByObject: Map<THREE.Object3D, RuntimePrimitive>;
   materials: Map<CanonicalMaterialId, THREE.Material>;
+  topology: Map<CanonicalPrimitiveId, TopologyIndex>;
 };
 export type LoadedModel = {
   canonical: CanonicalModel;
@@ -87,6 +92,7 @@ export class ModelController {
       primitives: new Map(),
       primitiveByObject: new Map(),
       materials: new Map(),
+      topology: new Map(),
     };
     root.traverse((object) => {
       const association = associations?.get(object);
@@ -114,9 +120,27 @@ export class ModelController {
       };
       runtime.primitives.set(primitiveId, item);
       runtime.primitiveByObject.set(mesh, item);
+      runtime.topology.set(primitiveId, topologyFor(mesh.geometry as THREE.BufferGeometry));
       if (primitive.materialId && mesh.material instanceof THREE.Material)
         runtime.materials.set(primitive.materialId, mesh.material);
     });
     return runtime;
   }
+}
+
+function topologyFor(geometry: THREE.BufferGeometry): TopologyIndex {
+  const position = geometry.getAttribute('position');
+  const indexed = geometry.getIndex();
+  const triangles: string[][] = [];
+  for (let face = 0; face < Math.floor((indexed?.count ?? position.count) / 3); face += 1) {
+    triangles.push(
+      [0, 1, 2].map((offset) => {
+        const vertex = indexed ? indexed.getX(face * 3 + offset) : face * 3 + offset;
+        return indexed
+          ? `index:${vertex}`
+          : `position:${position.getX(vertex)},${position.getY(vertex)},${position.getZ(vertex)}`;
+      }),
+    );
+  }
+  return createTopologyIndex(triangles);
 }

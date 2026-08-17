@@ -4,11 +4,19 @@ import {
   type SelectionSet,
   type SelectionTarget,
 } from '@electronic-artefacts/spatial-project-core';
+import {
+  connectedComponent,
+  growSelection,
+  shrinkSelection,
+  type TopologyIndex,
+} from '@electronic-artefacts/spatial-project-core';
 import * as THREE from 'three';
+import type { CanonicalPrimitiveId } from '@electronic-artefacts/spatial-importers';
 import type { RuntimeModelMap, RuntimePrimitive } from '../model/ModelController';
 
 export const ACTIVE_SELECTION_ID = 'active-selection';
-export type SelectionMode = 'face' | 'mesh' | 'primitive' | 'material';
+export type SelectionMode =
+  'face' | 'mesh' | 'primitive' | 'material' | 'connected' | 'brush' | 'erase';
 
 function targetFor(primitive: RuntimePrimitive, faces: number[]): SelectionTarget {
   return {
@@ -88,6 +96,61 @@ export class SelectionController {
     this.changed();
   }
 
+  selectConnected(primitive: RuntimePrimitive, seed: number, runtime: RuntimeModelMap) {
+    const topology = runtime.topology.get(primitive.primitiveId);
+    if (!topology) return;
+    const history = this.getHistory();
+    if (!history) return;
+    history.execute(
+      commands.setSelection({
+        id: ACTIVE_SELECTION_ID,
+        source: 'manual',
+        targets: [targetFor(primitive, connectedComponent(topology, seed))],
+      }),
+    );
+    this.changed();
+  }
+
+  grow(runtime: RuntimeModelMap) {
+    this.transformActive(runtime, growSelection);
+  }
+
+  shrink(runtime: RuntimeModelMap) {
+    this.transformActive(runtime, shrinkSelection);
+  }
+
+  applyStroke(
+    runtime: RuntimeModelMap,
+    hits: Map<CanonicalPrimitiveId, Set<number>>,
+    erase: boolean,
+  ) {
+    const history = this.getHistory();
+    if (!history || !hits.size) return;
+    const facesByPrimitive = new Map<string, Set<number>>();
+    this.active()?.targets.forEach((target) => {
+      if (target.canonicalPrimitiveId)
+        facesByPrimitive.set(target.canonicalPrimitiveId, new Set(target.faces));
+    });
+    hits.forEach((faces, primitiveId) => {
+      const current = facesByPrimitive.get(primitiveId) ?? new Set<number>();
+      faces.forEach((face) => (erase ? current.delete(face) : current.add(face)));
+      facesByPrimitive.set(primitiveId, current);
+    });
+    const targets = [...facesByPrimitive].flatMap(([primitiveId, faces]) => {
+      const primitive = runtime.primitives.get(primitiveId as CanonicalPrimitiveId);
+      return primitive && faces.size
+        ? [
+            targetFor(
+              primitive,
+              [...faces].sort((a, b) => a - b),
+            ),
+          ]
+        : [];
+    });
+    history.execute(commands.setSelection({ id: ACTIVE_SELECTION_ID, source: 'manual', targets }));
+    this.changed();
+  }
+
   clear() {
     const history = this.getHistory();
     if (!history) return;
@@ -110,5 +173,23 @@ export class SelectionController {
       );
     }
     return history;
+  }
+
+  private transformActive(
+    runtime: RuntimeModelMap,
+    transform: (index: TopologyIndex, faces: readonly number[]) => number[],
+  ) {
+    const history = this.getHistory();
+    const active = this.active();
+    if (!history || !active) return;
+    const targets = active.targets.flatMap((target) => {
+      const primitive = target.canonicalPrimitiveId
+        ? runtime.primitives.get(target.canonicalPrimitiveId as CanonicalPrimitiveId)
+        : undefined;
+      const topology = primitive ? runtime.topology.get(primitive.primitiveId) : undefined;
+      return primitive && topology ? [targetFor(primitive, transform(topology, target.faces))] : [];
+    });
+    history.execute(commands.setSelection({ id: ACTIVE_SELECTION_ID, source: 'manual', targets }));
+    this.changed();
   }
 }

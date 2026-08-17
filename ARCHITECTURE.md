@@ -47,6 +47,12 @@ Overlay Renderer
 
 Creating a region snapshots the active selection into triangle selectors and deliberately keeps that selection active, so it can be refined or reused. Face, Mesh, Primitive and Material selection are enabled only when their canonical runtime mapping is available; Material selection covers every primitive in the loaded canonical model sharing that material.
 
+## Selection tools
+
+Face toggles a triangle. Mesh, Primitive and Material replace the active SelectionSet from canonical identity. Connected selects the primitive-scoped edge-connected component. Grow adds immediate edge neighbours; Shrink removes selected boundary triangles. Brush and Erase accumulate pointer hits and commit one command per stroke. Lasso is intentionally deferred: V0.2 will not silently select hidden geometry without an explicit visible-geometry occlusion rule.
+
+Topology is exact by default: indexed geometry uses shared index edges and non-indexed geometry uses exact matching positions. No weld tolerance is applied implicitly. The runtime fixtures are intentionally tiny; no measured workload currently justifies BVH.
+
 ## Supported inputs
 
 | Input                        | Status                                               |
