@@ -64,6 +64,8 @@ let brushRadiusPx = 36;
 let raf = 0;
 let topologyReady = false;
 let topologyGeneration = 0;
+type ViewMode = 'lit' | 'unlit' | 'wireframe' | 'selection';
+const originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
 type BenchmarkSnapshot = {
   load?: Record<string, number>;
   overlayMs?: number;
@@ -151,6 +153,65 @@ function frame() {
     .add(new THREE.Vector3(0.8, 0.6, 1).normalize().multiplyScalar(sphere.radius * 3));
   controls.target.copy(sphere.center);
   controls.update();
+  render();
+}
+
+function frameSelection() {
+  const runtime = modelController.model?.runtime;
+  const targets = selectionController.active()?.targets;
+  if (!runtime || !targets?.length) return frame();
+  const box = new THREE.Box3();
+  targets.forEach((target) => {
+    const primitive = target.canonicalPrimitiveId
+      ? runtime.primitives.get(target.canonicalPrimitiveId as CanonicalPrimitiveId)
+      : undefined;
+    if (primitive) box.expandByObject(primitive.mesh);
+  });
+  if (box.isEmpty()) return frame();
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  camera.position
+    .copy(sphere.center)
+    .add(new THREE.Vector3(0.8, 0.6, 1).normalize().multiplyScalar(sphere.radius * 3));
+  controls.target.copy(sphere.center);
+  controls.update();
+  render();
+}
+
+function setIsolation(next: boolean) {
+  const runtime = modelController.model?.runtime;
+  if (!runtime) return;
+  const selected = new Set(
+    selectionController.active()?.targets.map((target) => target.canonicalPrimitiveId) ?? [],
+  );
+  runtime.primitives.forEach((primitive) => {
+    primitive.mesh.visible = !next || selected.has(primitive.primitiveId);
+  });
+  document.body.dataset.isolated = String(next);
+  status.textContent = next ? 'Isolated the active selection.' : 'Restored all surfaces.';
+  render();
+}
+
+function setViewMode(next: ViewMode) {
+  if (!root) return;
+  root.traverse((object) => {
+    if (!(object as THREE.Mesh).isMesh) return;
+    const mesh = object as THREE.Mesh;
+    const original = originalMaterials.get(mesh) ?? mesh.material;
+    originalMaterials.set(mesh, original);
+    if (next === 'lit') {
+      mesh.material = original;
+      return;
+    }
+    const source = Array.isArray(original) ? original[0] : original;
+    const material =
+      next === 'wireframe'
+        ? new THREE.MeshBasicMaterial({ color: 0xaebcff, wireframe: true })
+        : new THREE.MeshBasicMaterial({ color: next === 'selection' ? 0x4b5268 : 0xc8cfdf });
+    if (source) material.side = source.side;
+    mesh.material = material;
+  });
+  document.body.dataset.viewMode = next;
+  status.textContent = `${next[0]!.toUpperCase()}${next.slice(1)} view enabled.`;
   render();
 }
 
@@ -458,7 +519,12 @@ function pick(event: MouseEvent) {
   else if (selectionMode === 'material')
     selectionController.selectMaterial(primitive, modelController.model!.runtime);
   else if (selectionMode === 'connected') void selectConnected(primitive, face);
-  else selectionController.selectFace(primitive, face);
+  else
+    selectionController.selectFace(
+      primitive,
+      face,
+      event.altKey ? 'subtract' : event.shiftKey ? 'add' : 'replace',
+    );
 }
 
 renderer.domElement.addEventListener('click', (event) => {
@@ -650,6 +716,10 @@ const runAction = (action: string) => {
     document.body.classList.toggle('inspector-hidden');
     return;
   }
+  if (action === 'frame-selection') return frameSelection();
+  if (action === 'isolate') return setIsolation(true);
+  if (action === 'show-all') return setIsolation(false);
+  if (action.startsWith('view-')) return setViewMode(action.slice(5) as ViewMode);
   if (action.startsWith('mode-')) {
     document
       .querySelector<HTMLButtonElement>(`[data-selection-mode="${action.slice(5)}"]`)
@@ -682,15 +752,25 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     closeMenus();
     $('#context-menu').hidden = true;
+    if (selectedFaceCount()) selectionController.clear();
   }
   if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
     return;
+  const key = event.key.toLowerCase();
   const action =
-    event.key.toLowerCase() === 'b'
+    key === 'b'
       ? 'mode-brush'
-      : event.key.toLowerCase() === 'l'
+      : key === 'l'
         ? 'mode-lasso'
-        : undefined;
+        : key === 'f'
+          ? 'frame-selection'
+          : key === 'h'
+            ? event.shiftKey
+              ? 'show-all'
+              : 'isolate'
+            : ['1', '2', '3', '4', '5'].includes(key)
+              ? `mode-${(['face', 'mesh', 'primitive', 'material', 'connected'] as const)[Number(key) - 1]}`
+              : undefined;
   if (action) runAction(action);
 });
 const contextMenu = $('#context-menu');
@@ -701,7 +781,7 @@ renderer.domElement.addEventListener('contextmenu', (event) => {
   const hit = root ? hitAt(event) : undefined;
   contextMenu.innerHTML = root
     ? hasSelection
-      ? `<button role="menuitem" data-action="save-region">Create region</button><button role="menuitem" data-action="mode-connected">Select connected</button><span class="menu-divider"></span><button role="menuitem" data-action="grow">Grow selection</button><button role="menuitem" data-action="shrink">Shrink selection</button><button role="menuitem" data-action="clear">Clear selection</button>`
+      ? `<button role="menuitem" data-action="save-region">Create region</button><button role="menuitem" data-action="frame-selection">Frame selection</button><button role="menuitem" data-action="isolate">Isolate selection</button><button role="menuitem" data-action="mode-connected">Select connected</button><span class="menu-divider"></span><button role="menuitem" data-action="grow">Grow selection</button><button role="menuitem" data-action="shrink">Shrink selection</button><button role="menuitem" data-action="clear">Clear selection</button>`
       : `<button role="menuitem" data-action="${hit ? 'mode-face' : 'reset-camera'}">${hit ? 'Select face' : 'Reset camera'}</button><button role="menuitem" data-action="mode-brush">Start Brush</button><button role="menuitem" data-action="mode-lasso">Start Lasso</button>`
     : `<button role="menuitem" data-action="open-glb">Open GLB…</button><button role="menuitem" data-action="open-manifest">Open artifact.json…</button><button role="menuitem" data-action="try-example">Try example</button>`;
   contextMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 220)}px`;

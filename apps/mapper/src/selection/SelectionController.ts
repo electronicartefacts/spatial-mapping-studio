@@ -35,14 +35,25 @@ export class SelectionController {
     private readonly changed: () => void,
   ) {}
 
-  selectFace(primitive: RuntimePrimitive, face: number) {
+  selectFace(primitive: RuntimePrimitive, face: number, operation: 'replace' | 'add' | 'subtract') {
     const history = this.ensureActiveSelection();
     if (!history) return;
+    if (operation === 'replace') {
+      history.execute(
+        commands.setSelection({
+          id: ACTIVE_SELECTION_ID,
+          source: 'click',
+          targets: [targetFor(primitive, [face])],
+        }),
+      );
+      this.changed();
+      return;
+    }
     const active = this.active();
     const target = active?.targets.find(
       (item) => item.canonicalPrimitiveId === primitive.primitiveId,
     );
-    if (target?.faces.includes(face)) {
+    if (operation === 'subtract' || target?.faces.includes(face)) {
       history.execute(
         commands.removeFacesFromSelection(ACTIVE_SELECTION_ID, targetFor(primitive, [face])),
       );
