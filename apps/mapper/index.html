@@ -34,14 +34,23 @@
             <p class="panel-kicker">SESSION / SOURCE</p>
             <p class="panel-title">Start with a local model</p>
             <label class="file-button"
-              >OPEN A GLB<input id="glb-input" type="file" accept=".glb,model/gltf-binary" /></label
+              ><span class="action-icon upload" aria-hidden="true"></span>OPEN A GLB<input
+                id="glb-input"
+                type="file"
+                accept=".glb,model/gltf-binary" /></label
             ><label class="file-button file-button-secondary"
-              >LOAD ARTIFACT.JSON<input
+              ><span class="action-icon archive" aria-hidden="true"></span>LOAD ARTIFACT.JSON<input
                 id="manifest-input"
                 type="file"
-                accept="application/json,.json" /></label
-            ><button id="try-example" class="primary">Try example</button
-            ><button id="reset-camera">Reset camera</button>
+                accept="application/json,.json"
+            /></label>
+            <div class="source-actions">
+              <button id="try-example" class="primary">
+                <span class="action-icon spark" aria-hidden="true"></span>Try example</button
+              ><button id="reset-camera">
+                <span class="action-icon reset" aria-hidden="true"></span>Reset
+              </button>
+            </div>
           </section>
           <p id="status" role="status">Drop a GLB into the stage, or open a file.</p>
           <section id="model-info" hidden aria-label="Imported model information">
@@ -54,18 +63,30 @@
             <p class="panel-kicker">SELECTION CONSOLE</p>
             <p class="panel-title">Choose how to map surfaces</p>
             <div role="group" aria-label="Selection mode" class="selection-modes">
-              <button data-selection-mode="face" aria-pressed="true">Face</button>
-              <button data-selection-mode="mesh" aria-pressed="false">Mesh</button>
+              <button data-selection-mode="face" aria-pressed="true">
+                <span class="tool-icon face" aria-hidden="true"></span><span>Face</span>
+              </button>
+              <button data-selection-mode="mesh" aria-pressed="false">
+                <span class="tool-icon mesh" aria-hidden="true"></span><span>Mesh</span>
+              </button>
               <button data-selection-mode="primitive" aria-pressed="false" disabled>
-                Primitive
+                <span class="tool-icon primitive" aria-hidden="true"></span><span>Primitive</span>
               </button>
-              <button data-selection-mode="material" aria-pressed="false" disabled>Material</button>
+              <button data-selection-mode="material" aria-pressed="false" disabled>
+                <span class="tool-icon material" aria-hidden="true"></span><span>Material</span>
+              </button>
               <button data-selection-mode="connected" aria-pressed="false" disabled>
-                Connected
+                <span class="tool-icon connected" aria-hidden="true"></span><span>Connected</span>
               </button>
-              <button data-selection-mode="brush" aria-pressed="false" disabled>Brush</button>
-              <button data-selection-mode="erase" aria-pressed="false" disabled>Erase</button>
-              <button data-selection-mode="lasso" aria-pressed="false" disabled>Lasso</button>
+              <button data-selection-mode="brush" aria-pressed="false" disabled>
+                <span class="tool-icon brush" aria-hidden="true"></span><span>Brush</span>
+              </button>
+              <button data-selection-mode="erase" aria-pressed="false" disabled>
+                <span class="tool-icon erase" aria-hidden="true"></span><span>Erase</span>
+              </button>
+              <button data-selection-mode="lasso" aria-pressed="false" disabled>
+                <span class="tool-icon lasso" aria-hidden="true"></span><span>Lasso</span>
+              </button>
             </div>
             <div class="tool-row">
               <button id="grow-selection" disabled>Grow</button

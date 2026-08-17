@@ -26,6 +26,9 @@ button,
 input {
   font: inherit;
 }
+button {
+  appearance: none;
+}
 
 .studio-app {
   min-height: 100vh;
@@ -127,6 +130,9 @@ h1 {
     background 0.16s,
     transform 0.16s;
 }
+.mode:not(.active) {
+  background: rgba(255, 255, 255, 0.045);
+}
 .mode span {
   color: #69728c;
   font-size: 0.55rem;
@@ -186,7 +192,7 @@ aside {
   scrollbar-color: rgba(184, 192, 255, 0.3) transparent;
 }
 .panel-section {
-  padding: 14px;
+  padding: 16px;
   border-top: 1px solid rgba(218, 225, 255, 0.1);
 }
 .panel-section:first-child {
@@ -203,6 +209,74 @@ aside {
   margin: 0 0 10px;
   color: #dfe2ef;
   font-size: 0.73rem;
+}
+.source-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  margin-top: 6px;
+}
+.source-actions button {
+  margin: 0;
+}
+.action-icon {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  margin-right: 7px;
+  flex: 0 0 13px;
+}
+.action-icon::before,
+.action-icon::after {
+  content: '';
+  position: absolute;
+  display: block;
+}
+.action-icon.upload::before {
+  inset: 2px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+.action-icon.upload::after {
+  left: 5px;
+  top: 0;
+  width: 3px;
+  height: 7px;
+  border-left: 1.5px solid currentColor;
+  border-top: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.action-icon.archive::before {
+  inset: 3px 1px 1px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+.action-icon.archive::after {
+  top: 0;
+  left: 0;
+  width: 11px;
+  height: 3px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+.action-icon.spark::before {
+  inset: 2px;
+  border: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.action-icon.reset::before {
+  inset: 1px;
+  border: 1.5px solid currentColor;
+  border-left-color: transparent;
+  border-radius: 50%;
+}
+.action-icon.reset::after {
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-top: 1.5px solid currentColor;
+  border-left: 1.5px solid currentColor;
 }
 
 button,
@@ -260,7 +334,145 @@ button:disabled {
   gap: 4px;
 }
 .selection-modes {
-  margin: 0.5rem 0;
+  gap: 6px;
+  margin: 0.7rem 0;
+}
+.selection-modes button {
+  justify-content: flex-start;
+  min-height: 43px;
+  padding: 0 10px;
+  font-size: 0.66rem;
+  text-align: left;
+}
+.tool-icon {
+  position: relative;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  color: #b7c0f5;
+  flex: 0 0 16px;
+}
+.tool-icon::before,
+.tool-icon::after {
+  content: '';
+  position: absolute;
+  display: block;
+}
+.tool-icon.face::before {
+  inset: 2px;
+  border: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.tool-icon.face::after {
+  top: 3px;
+  left: 7px;
+  height: 10px;
+  border-left: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+.tool-icon.mesh::before {
+  inset: 1px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  background:
+    linear-gradient(45deg, transparent 47%, currentColor 48% 52%, transparent 53%),
+    linear-gradient(-45deg, transparent 47%, currentColor 48% 52%, transparent 53%);
+}
+.tool-icon.primitive::before {
+  inset: 1px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+.tool-icon.primitive::after {
+  top: 4px;
+  left: 4px;
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+.tool-icon.material::before {
+  inset: 2px;
+  border: 1.5px solid currentColor;
+  border-radius: 50% 50% 50% 2px;
+  transform: rotate(-45deg);
+}
+.tool-icon.material::after {
+  top: 5px;
+  left: 6px;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.tool-icon.connected::before {
+  left: 1px;
+  top: 5px;
+  width: 7px;
+  height: 5px;
+  border: 1.5px solid currentColor;
+  border-radius: 5px;
+  transform: rotate(-42deg);
+}
+.tool-icon.connected::after {
+  right: 1px;
+  top: 5px;
+  width: 7px;
+  height: 5px;
+  border: 1.5px solid currentColor;
+  border-radius: 5px;
+  transform: rotate(-42deg);
+}
+.tool-icon.brush::before {
+  left: 7px;
+  top: 0;
+  width: 3px;
+  height: 12px;
+  border-radius: 3px;
+  background: currentColor;
+  transform: rotate(42deg);
+}
+.tool-icon.brush::after {
+  left: 1px;
+  bottom: 1px;
+  width: 8px;
+  height: 4px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  transform: rotate(42deg);
+}
+.tool-icon.erase::before {
+  inset: 3px 1px 3px 2px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  transform: skew(-20deg);
+}
+.tool-icon.erase::after {
+  left: 2px;
+  right: 1px;
+  bottom: 1px;
+  border-top: 1.5px solid currentColor;
+}
+.tool-icon.lasso::before {
+  inset: 1px;
+  border: 1.5px dashed currentColor;
+  border-radius: 45% 55% 52% 48%;
+  transform: rotate(-20deg);
+}
+.tool-icon.lasso::after {
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  border-top: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transform-origin: right;
+}
+.selection-modes button[aria-pressed='true'] .tool-icon {
+  color: #fff;
+}
+.selection-modes button:disabled .tool-icon {
+  color: #778096;
 }
 .selection-modes button[aria-pressed='true'] {
   color: #fff;
