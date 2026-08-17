@@ -92,9 +92,11 @@
               <button id="grow-selection" disabled>Grow</button
               ><button id="shrink-selection" disabled>Shrink</button>
             </div>
-            <label
-              >Brush radius<input id="brush-radius" type="range" min="8" max="120" value="36"
-            /></label>
+            <label class="brush-control">
+              <span>Brush radius</span
+              ><output id="brush-radius-value" for="brush-radius">36 px</output>
+              <input id="brush-radius" type="range" min="8" max="120" value="36" />
+            </label>
             <label>ID<input id="region-id" value="region-1" /></label
             ><label>Label<input id="region-label" value="Selected surface" /></label
             ><label>Tags<input id="region-tags" placeholder="material, function" /></label>

@@ -637,7 +637,15 @@ document.querySelectorAll<HTMLButtonElement>('.workflow-nav .mode').forEach((but
   };
 });
 $('#brush-radius').addEventListener('input', (event) => {
-  brushRadiusPx = Number((event.target as HTMLInputElement).value);
+  const input = event.target as HTMLInputElement;
+  brushRadiusPx = Number(input.value);
+  $('#brush-radius-value').textContent = `${brushRadiusPx} px`;
+  const minimum = Number(input.min);
+  const maximum = Number(input.max);
+  input.style.setProperty(
+    '--brush-fill',
+    `${((brushRadiusPx - minimum) / (maximum - minimum)) * 100}%`,
+  );
 });
 async function selectConnected(
   primitive: import('./model/ModelController').RuntimePrimitive,
