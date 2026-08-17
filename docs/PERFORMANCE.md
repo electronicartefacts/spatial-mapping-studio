@@ -32,3 +32,9 @@ These figures are a local reference, not a mobile guarantee. They identify topol
 ## Decisions
 
 BVH is deferred: this harness does not measure raycast latency, which is its relevant decision gate. Workers are deferred: the measured pure topology operations remain synchronous until a representative model shows UI blocking. The principal memory copies are source bytes, GLTFLoader buffers, topology arrays, and temporary overlay geometry.
+
+## Browser reference
+
+`pnpm benchmark:browser` runs the real Mapper in Chromium and reports a readable JSON line. The latest local run on `shared-material.glb` measured 290.23 ms TTI, 7.80 ms pointer-move median, 8.46 ms p95, 3.80 ms primitive selection, and a Brush stroke selecting two faces followed by working undo/redo.
+
+Current optimization decisions: **BVH: defer** (no measured raycast bottleneck); **Workers: defer** (topology import only); **Overlay: investigate only above larger selections**; **Brush algorithm: retain centroid-with-hit fallback**, which guarantees the directly hit face remains selectable when its centroid lies outside the brush radius.
