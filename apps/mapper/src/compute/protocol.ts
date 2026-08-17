@@ -22,6 +22,15 @@ export type ComputeRequest =
       model: number[];
       viewProjection: number[];
     }
+  | {
+      type: 'lasso';
+      requestId: number;
+      primitiveId: CanonicalPrimitiveId;
+      polygon: [number, number][];
+      viewport: [number, number];
+      model: number[];
+      viewProjection: number[];
+    }
   | { type: 'dispose'; requestId: number; primitiveId?: CanonicalPrimitiveId };
 
 export type ComputeResponse =

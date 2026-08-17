@@ -10,7 +10,7 @@ import type { RuntimeModelMap, RuntimePrimitive } from '../model/ModelController
 
 export const ACTIVE_SELECTION_ID = 'active-selection';
 export type SelectionMode =
-  'face' | 'mesh' | 'primitive' | 'material' | 'connected' | 'brush' | 'erase';
+  'face' | 'mesh' | 'primitive' | 'material' | 'connected' | 'brush' | 'erase' | 'lasso';
 
 function targetFor(primitive: RuntimePrimitive, faces: number[]): SelectionTarget {
   return {
@@ -150,6 +150,25 @@ export class SelectionController {
     const history = this.getHistory();
     if (!history) return;
     history.execute(commands.clearSelection());
+    this.changed();
+  }
+
+  invert(runtime: RuntimeModelMap) {
+    const history = this.getHistory();
+    if (!history) return;
+    const selected = new Map(
+      this.active()?.targets.map((target) => [
+        target.canonicalPrimitiveId,
+        new Set(target.faces),
+      ]) ?? [],
+    );
+    const targets = [...runtime.primitives.values()].map((primitive) =>
+      targetFor(
+        primitive,
+        allFaces(primitive.mesh).filter((face) => !selected.get(primitive.primitiveId)?.has(face)),
+      ),
+    );
+    history.execute(commands.setSelection({ id: ACTIVE_SELECTION_ID, source: 'manual', targets }));
     this.changed();
   }
 

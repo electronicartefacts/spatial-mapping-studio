@@ -154,6 +154,16 @@ li > button:first-child {
   position: relative;
   background: radial-gradient(circle at 60% 45%, #4c5362, #17191c 62%);
 }
+#lasso-path {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  fill: rgba(255, 196, 0, 0.15);
+  stroke: #ff5624;
+  stroke-width: 2;
+}
 #viewport canvas {
   width: 100%;
   height: 100%;
