@@ -21,6 +21,8 @@ datasets/
 private/
 local-assets/
 benchmarks/local/
+benchmarks/generated/
+benchmark-results/
 *.glb
 !examples/mapped-object/model.glb
 !examples/conformance/model.glb

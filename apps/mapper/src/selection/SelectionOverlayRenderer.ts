@@ -8,8 +8,9 @@ export class SelectionOverlayRenderer {
   private overlays: THREE.Mesh[] = [];
 
   rebuild(runtime: RuntimeModelMap | undefined, selection: SelectionSet | undefined) {
+    const started = performance.now();
     this.clear();
-    if (!runtime || !selection) return;
+    if (!runtime || !selection) return performance.now() - started;
 
     for (const target of selection.targets) {
       const mesh = target.canonicalPrimitiveId
@@ -43,6 +44,7 @@ export class SelectionOverlayRenderer {
       mesh.add(overlay);
       this.overlays.push(overlay);
     }
+    return performance.now() - started;
   }
 
   clear() {

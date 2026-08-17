@@ -34,6 +34,16 @@ export type LoadedModel = {
   root: THREE.Object3D;
   runtime: RuntimeModelMap;
   diagnostics: ImportDiagnostic[];
+  timings: LoadTimings;
+};
+
+/** Local performance breakdown exposed to the Studio benchmark; it is never sent anywhere. */
+export type LoadTimings = {
+  fileReadMs: number;
+  canonicalImportMs: number;
+  gltfParseMs: number;
+  runtimeMappingMs: number;
+  topologyMs: number;
 };
 
 type Association = { nodes?: number; meshes?: number; primitives?: number; materials?: number };
@@ -44,24 +54,39 @@ export class ModelController {
   private current: LoadedModel | undefined;
 
   async load(file: File, sha256: string, url: string): Promise<LoadedModel> {
+    const started = performance.now();
     const bytes = await file.arrayBuffer();
+    const fileReadMs = performance.now() - started;
+    const canonicalStarted = performance.now();
     const imported = await new GltfImporter().import({
       name: file.name,
       mimeType: file.type || 'model/gltf-binary',
       bytes,
       sha256,
     });
+    const canonicalImportMs = performance.now() - canonicalStarted;
+    const gltfStarted = performance.now();
     const gltf = (await new GLTFLoader().loadAsync(url)) as unknown as GltfWithAssociations & {
       scene: THREE.Object3D;
     };
-    const runtime = this.mapRuntime(imported.model, gltf.scene, gltf.parser.associations);
+    const gltfParseMs = performance.now() - gltfStarted;
+    const runtimeStarted = performance.now();
+    const mapped = this.mapRuntime(imported.model, gltf.scene, gltf.parser.associations);
+    const runtimeMappingMs = performance.now() - runtimeStarted;
     this.current = {
       canonical: imported.model,
       root: gltf.scene,
-      runtime,
+      runtime: mapped.runtime,
       diagnostics: [...imported.diagnostics],
+      timings: {
+        fileReadMs,
+        canonicalImportMs,
+        gltfParseMs,
+        runtimeMappingMs,
+        topologyMs: mapped.topologyMs,
+      },
     };
-    if (runtime.primitives.size !== imported.model.primitives.length) {
+    if (mapped.runtime.primitives.size !== imported.model.primitives.length) {
       this.current.diagnostics.push({
         level: 'warning',
         code: 'runtime-primitive-mapping-incomplete',
@@ -85,7 +110,7 @@ export class ModelController {
     canonical: CanonicalModel,
     root: THREE.Object3D,
     associations: Map<object, Association> | undefined,
-  ): RuntimeModelMap {
+  ): { runtime: RuntimeModelMap; topologyMs: number } {
     const runtime: RuntimeModelMap = {
       nodeObjects: new Map(),
       meshObjects: new Map(),
@@ -94,6 +119,7 @@ export class ModelController {
       materials: new Map(),
       topology: new Map(),
     };
+    let topologyMs = 0;
     root.traverse((object) => {
       const association = associations?.get(object);
       if (association?.nodes !== undefined)
@@ -120,11 +146,13 @@ export class ModelController {
       };
       runtime.primitives.set(primitiveId, item);
       runtime.primitiveByObject.set(mesh, item);
+      const topologyStarted = performance.now();
       runtime.topology.set(primitiveId, topologyFor(mesh.geometry as THREE.BufferGeometry));
+      topologyMs += performance.now() - topologyStarted;
       if (primitive.materialId && mesh.material instanceof THREE.Material)
         runtime.materials.set(primitive.materialId, mesh.material);
     });
-    return runtime;
+    return { runtime, topologyMs };
   }
 }
 
