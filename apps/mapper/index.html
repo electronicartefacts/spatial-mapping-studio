@@ -6,22 +6,33 @@
     <title>Spatial Mapping Studio</title>
   </head>
   <body>
-    <main>
-      <header>
-        <p class="eyebrow">ELECTRONIC ARTEFACTS</p>
-        <h1>SPATIAL<br />MAPPING STUDIO</h1>
-        <p>Turn surfaces into interfaces.</p>
-        <p class="promise">Your files stay on your device. <span>Open source.</span></p>
+    <main class="studio-app">
+      <div class="ambient-backdrop" aria-hidden="true">
+        <span class="halo halo-one"></span><span class="halo halo-two"></span
+        ><span class="halo halo-three"></span>
+      </div>
+      <header class="studio-header">
+        <div class="brand-lockup">
+          <p class="eyebrow">ELECTRONIC ARTEFACTS</p>
+          <h1>Spatial Mapping Studio</h1>
+        </div>
+        <nav aria-label="Studio workflow" class="workflow-nav">
+          <button class="mode active" type="button"><span>01</span>Inspect</button>
+          <button class="mode" type="button"><span>02</span>Select</button>
+          <button class="mode" type="button"><span>03</span>Describe</button>
+          <button class="mode" type="button"><span>04</span>Preview</button>
+          <button class="mode" type="button"><span>05</span>Export</button>
+        </nav>
+        <div class="header-status">
+          <span id="active-tool-caption">Face selection</span>
+          <span class="privacy-mark">Local-first</span>
+        </div>
       </header>
       <section class="workspace">
         <aside>
-          <nav aria-label="Workflow" class="workflow-nav">
-            <button class="mode active">01 Inspect</button><button class="mode">02 Select</button
-            ><button class="mode">03 Describe</button><button class="mode">04 Preview</button
-            ><button class="mode">05 Export</button>
-          </nav>
           <section class="panel-section panel-open">
-            <p class="panel-kicker">01 / SOURCE</p>
+            <p class="panel-kicker">SESSION / SOURCE</p>
+            <p class="panel-title">Start with a local model</p>
             <label class="file-button"
               >OPEN A GLB<input id="glb-input" type="file" accept=".glb,model/gltf-binary" /></label
             ><label class="file-button file-button-secondary"
@@ -32,7 +43,7 @@
             ><button id="try-example" class="primary">Try example</button
             ><button id="reset-camera">Reset camera</button>
           </section>
-          <p id="status" role="status">Drop a GLB into the viewport, or open a file.</p>
+          <p id="status" role="status">Drop a GLB into the stage, or open a file.</p>
           <section id="model-info" hidden aria-label="Imported model information">
             <h2>Model</h2>
             <p id="model-summary"></p>
@@ -40,7 +51,8 @@
             <ul id="import-diagnostics" aria-label="Import diagnostics"></ul>
           </section>
           <section class="panel-section">
-            <p class="panel-kicker">02 / SELECT SURFACES</p>
+            <p class="panel-kicker">SELECTION CONSOLE</p>
+            <p class="panel-title">Choose how to map surfaces</p>
             <div role="group" aria-label="Selection mode" class="selection-modes">
               <button data-selection-mode="face" aria-pressed="true">Face</button>
               <button data-selection-mode="mesh" aria-pressed="false">Mesh</button>
@@ -71,12 +83,12 @@
             ><button id="invert-selection">Invert</button>
           </section>
           <section class="panel-section">
-            <p class="panel-kicker">03 / DESCRIBE REGION</p>
+            <p class="panel-kicker">REGION DETAILS</p>
             <button id="save-region" class="primary">Create region from selection</button>
             <button id="undo" disabled>Undo</button><button id="redo" disabled>Redo</button>
           </section>
           <section class="panel-section">
-            <p class="panel-kicker">REGIONS</p>
+            <p class="panel-kicker">MAPPED REGIONS</p>
             <ul id="regions" aria-label="Mapped regions"></ul>
             <section id="region-inspector" hidden aria-label="Region metadata">
               <h2>Edit region</h2>
@@ -90,8 +102,15 @@
           </section>
         </aside>
         <section id="viewport" aria-label="3D GLB viewport">
+          <div class="stage-meta" aria-hidden="true">
+            <span>SPATIAL STAGE</span><span>ORBIT · PAN · ZOOM</span>
+          </div>
           <svg id="lasso-path" hidden aria-hidden="true"><polyline></polyline></svg>
-          <div id="drop-hint">OPEN A GLB<br /><small>Drag a local file here</small></div>
+          <div id="drop-hint">
+            <span class="stage-orb" aria-hidden="true"></span>OPEN A GLB<br /><small
+              >Drag a local file into your private workspace</small
+            >
+          </div>
           <div id="brush-preview" aria-hidden="true" hidden></div>
           <div id="cursor-hud" aria-hidden="true" hidden>
             <strong>SELECT</strong><span>Click a surface</span>

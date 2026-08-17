@@ -611,6 +611,29 @@ document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((b
     document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((modeButton) => {
       modeButton.setAttribute('aria-pressed', String(modeButton === button));
     });
+    const captions: Record<SelectionMode, string> = {
+      face: 'Face selection',
+      mesh: 'Mesh selection',
+      primitive: 'Primitive selection',
+      material: 'Material selection',
+      connected: 'Connected surfaces',
+      brush: 'Surface brush',
+      erase: 'Selection eraser',
+      lasso: 'Lasso selection',
+    };
+    $('#active-tool-caption').textContent = captions[selectionMode];
+  };
+});
+document.querySelectorAll<HTMLButtonElement>('.workflow-nav .mode').forEach((button, index) => {
+  button.onclick = () => {
+    document
+      .querySelectorAll<HTMLButtonElement>('.workflow-nav .mode')
+      .forEach((mode) => mode.classList.toggle('active', mode === button));
+    const panels = document.querySelectorAll<HTMLElement>('aside .panel-section');
+    panels[Math.min(index, panels.length - 1)]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
   };
 });
 $('#brush-radius').addEventListener('input', (event) => {
