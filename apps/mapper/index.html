@@ -31,15 +31,39 @@
           <p id="status" role="status">Drop a GLB into the viewport, or open a file.</p>
           <hr />
           <h2>New region</h2>
+          <div role="group" aria-label="Selection mode" class="selection-modes">
+            <button data-selection-mode="face" aria-pressed="true">Face</button>
+            <button data-selection-mode="mesh" aria-pressed="false">Mesh</button>
+            <button
+              disabled
+              title="Primitive identity is not yet reliable across loaded GLB meshes"
+            >
+              Primitive (planned)
+            </button>
+            <button
+              disabled
+              title="Material selection is deferred until its scope is defined reliably"
+            >
+              Material (planned)
+            </button>
+          </div>
           <label>ID<input id="region-id" value="region-1" /></label
           ><label>Label<input id="region-label" value="Selected surface" /></label
           ><label>Tags<input id="region-tags" placeholder="material, function" /></label>
           <p id="selection-count">0 selected faces</p>
           <button id="clear-selection">Clear selection</button
           ><button id="save-region" class="primary">Save region</button>
+          <button id="undo" disabled>Undo</button><button id="redo" disabled>Redo</button>
           <hr />
           <h2>Regions</h2>
           <ul id="regions" aria-label="Mapped regions"></ul>
+          <section id="region-inspector" hidden aria-label="Region metadata">
+            <h2>Edit region</h2>
+            <label>ID<input id="edit-region-id" /></label>
+            <label>Label<input id="edit-region-label" /></label>
+            <label>Tags<input id="edit-region-tags" /></label>
+            <p>Changes are saved when a field loses focus or you press Enter.</p>
+          </section>
           <button id="export-manifest" class="primary">Export artifact.json</button>
           <button id="restore-draft">Restore local draft</button>
         </aside>

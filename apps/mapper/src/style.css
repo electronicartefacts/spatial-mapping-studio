@@ -81,6 +81,20 @@ button,
   font: inherit;
   margin: 0.15rem 0;
 }
+button[aria-pressed='true'] {
+  background: #ff5624;
+  font-weight: 700;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.selection-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.2rem;
+  margin: 0.5rem 0;
+}
 .file-button {
   display: block;
   background: #174ec9;
@@ -123,6 +137,16 @@ li {
   padding: 0.45rem 0;
   border-bottom: 1px solid #bbb5a7;
   font-size: 0.82rem;
+}
+li > button:first-child {
+  text-align: left;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+#region-inspector p {
+  font-size: 0.7rem;
+  line-height: 1.35;
 }
 #viewport {
   grid-column: 2;

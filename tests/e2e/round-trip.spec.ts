@@ -14,16 +14,37 @@ test('Mapper export round-trips through Spatial Viewer', async ({ page }) => {
   const canvas = page.locator('#viewport canvas'),
     box = await canvas.boundingBox();
   expect(box).not.toBeNull();
-  for (const x of [0.3, 0.4, 0.5, 0.6, 0.7])
+  selectFace: for (const x of [0.3, 0.4, 0.5, 0.6, 0.7])
     for (const y of [0.3, 0.4, 0.5, 0.6, 0.7]) {
       await page.mouse.click(box!.x + box!.width * x, box!.y + box!.height * y);
-      if ((await page.locator('#selection-count').textContent()) !== '0 selected faces') break;
+      if ((await page.locator('#selection-count').textContent()) !== '0 selected faces')
+        break selectFace;
     }
+  await expect(page.locator('#selection-count')).not.toHaveText('0 selected faces');
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('#selection-count')).toHaveText('0 selected faces');
+  await page.getByRole('button', { name: 'Redo' }).click();
   await expect(page.locator('#selection-count')).not.toHaveText('0 selected faces');
   await page.locator('#region-id').fill('round-trip-face');
   await page.locator('#region-label').fill('Round-trip face');
   await page.locator('#region-tags').fill('fixture, verified');
   await page.getByRole('button', { name: 'Save region' }).click();
+  await expect(page.locator('#regions')).toContainText('Round-trip face');
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('#regions')).not.toContainText('Round-trip face');
+  await page.getByRole('button', { name: 'Redo' }).click();
+  await expect(page.locator('#regions')).toContainText('Round-trip face');
+  await page
+    .getByRole('button', { name: /Round-trip face/ })
+    .first()
+    .click();
+  await page.locator('#edit-region-label').fill('Renamed face');
+  await page.locator('#edit-region-label').press('Enter');
+  await expect(page.locator('#regions')).toContainText('Renamed face');
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('#regions')).toContainText('Round-trip face');
+  await page.getByRole('button', { name: 'Redo' }).click();
+  await expect(page.locator('#regions')).toContainText('Renamed face');
   const promise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export artifact.json' }).click();
   const download = await promise;
@@ -42,7 +63,7 @@ test('Mapper export round-trips through Spatial Viewer', async ({ page }) => {
     regions: [
       {
         id: 'round-trip-face',
-        label: 'Round-trip face',
+        label: 'Renamed face',
         tags: ['fixture', 'verified'],
         selector: { type: 'triangles', mesh: 'Mesh_0' },
       },
