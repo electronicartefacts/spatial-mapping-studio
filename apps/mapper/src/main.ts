@@ -55,6 +55,19 @@ let selectionMode: SelectionMode = 'face';
 let brushStroke: Map<CanonicalPrimitiveId, Set<number>> | undefined;
 let brushRadiusPx = 36;
 let raf = 0;
+type BenchmarkSnapshot = {
+  load?: Record<string, number>;
+  overlayMs?: number;
+  brushMs?: number;
+  raycastMs?: number;
+};
+type BenchmarkWindow = Window & {
+  __spatialBenchmark?: BenchmarkSnapshot;
+  __spatialBenchmarkMeasureBrush?: (x: number, y: number, radius: number) => number | undefined;
+  __spatialBenchmarkMeasureOverlay?: (faces: number) => number | undefined;
+};
+const benchmark = window as BenchmarkWindow;
+benchmark.__spatialBenchmark = {};
 
 const selectedFaceCount = () =>
   selectionController.active()?.targets.reduce((total, target) => total + target.faces.length, 0) ??
@@ -66,7 +79,11 @@ const selectionController = new SelectionController(
 
 function syncSelectionVisuals() {
   const count = selectedFaceCount();
-  overlayRenderer.rebuild(modelController.model?.runtime, selectionController.active());
+  const overlayMs = overlayRenderer.rebuild(
+    modelController.model?.runtime,
+    selectionController.active(),
+  );
+  benchmark.__spatialBenchmark = { ...benchmark.__spatialBenchmark, overlayMs };
   selectedCount.textContent = `${count} selected faces`;
   selectedCount.dataset.faces = String(count);
   render();
@@ -258,6 +275,8 @@ async function open(file: File) {
     frame();
     status.textContent =
       'Ready. SHA-256 fingerprint attached. Switch to Select and click triangles.';
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    benchmark.__spatialBenchmark = { ...benchmark.__spatialBenchmark, load: loaded.timings };
   } catch {
     payloadHash = undefined;
     status.textContent = 'This GLB could not be loaded.';
@@ -265,6 +284,7 @@ async function open(file: File) {
 }
 
 function hitAt(event: PointerEvent | MouseEvent) {
+  const started = performance.now();
   if (!root) return;
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.set(
@@ -275,12 +295,22 @@ function hitAt(event: PointerEvent | MouseEvent) {
   const hit = raycaster
     .intersectObject(root, true)
     .find((item) => (item.object as THREE.Mesh).isMesh);
-  if (!hit || typeof hit.faceIndex !== 'number') return;
+  if (!hit || typeof hit.faceIndex !== 'number') {
+    benchmark.__spatialBenchmark = {
+      ...benchmark.__spatialBenchmark,
+      raycastMs: performance.now() - started,
+    };
+    return;
+  }
   const primitive = modelController.model?.runtime.primitiveByObject.get(hit.object);
   if (!primitive) {
     status.textContent = 'This runtime mesh has no canonical GLB primitive mapping.';
     return;
   }
+  benchmark.__spatialBenchmark = {
+    ...benchmark.__spatialBenchmark,
+    raycastMs: performance.now() - started,
+  };
   return { primitive, face: hit.faceIndex };
 }
 
@@ -288,6 +318,7 @@ function brushFaces(
   primitive: import('./model/ModelController').RuntimePrimitive,
   event: PointerEvent,
 ) {
+  const started = performance.now();
   const geometry = primitive.mesh.geometry as THREE.BufferGeometry;
   const position = geometry.getAttribute('position');
   const index = geometry.getIndex();
@@ -310,8 +341,43 @@ function brushFaces(
     const y = rect.top + ((1 - point.y) / 2) * rect.height;
     if (Math.hypot(event.clientX - x, event.clientY - y) <= brushRadiusPx) candidates.push(face);
   }
+  benchmark.__spatialBenchmark = {
+    ...benchmark.__spatialBenchmark,
+    brushMs: performance.now() - started,
+  };
   return candidates;
 }
+
+benchmark.__spatialBenchmarkMeasureBrush = (x, y, radius) => {
+  const hit = hitAt(new PointerEvent('pointermove', { clientX: x, clientY: y }));
+  if (!hit) return;
+  const previousRadius = brushRadiusPx;
+  brushRadiusPx = radius;
+  const faces = brushFaces(
+    hit.primitive,
+    new PointerEvent('pointermove', { clientX: x, clientY: y }),
+  );
+  brushRadiusPx = previousRadius;
+  return faces.length;
+};
+benchmark.__spatialBenchmarkMeasureOverlay = (faces) => {
+  const primitive = modelController.model?.runtime.primitives.values().next().value;
+  if (!primitive) return;
+  const count = Math.min(faces, Math.floor((primitive.mesh.geometry.getIndex()?.count ?? 0) / 3));
+  const elapsed = overlayRenderer.rebuild(modelController.model?.runtime, {
+    id: 'benchmark-overlay',
+    source: 'manual',
+    targets: [
+      {
+        mesh: primitive.selectorMesh,
+        canonicalPrimitiveId: primitive.primitiveId,
+        faces: Array.from({ length: count }, (_, index) => index),
+      },
+    ],
+  });
+  overlayRenderer.clear();
+  return elapsed;
+};
 
 function updateBrushPreview(event: PointerEvent) {
   const preview = $('#brush-preview');
