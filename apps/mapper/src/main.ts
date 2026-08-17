@@ -624,17 +624,89 @@ document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((b
     $('#active-tool-caption').textContent = captions[selectionMode];
   };
 });
-document.querySelectorAll<HTMLButtonElement>('.workflow-nav .mode').forEach((button, index) => {
-  button.onclick = () => {
-    document
-      .querySelectorAll<HTMLButtonElement>('.workflow-nav .mode')
-      .forEach((mode) => mode.classList.toggle('active', mode === button));
-    const panels = document.querySelectorAll<HTMLElement>('aside .panel-section');
-    panels[Math.min(index, panels.length - 1)]?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    });
+const closeMenus = () => {
+  document.querySelectorAll<HTMLElement>('.app-menu').forEach((menu) => (menu.hidden = true));
+  document
+    .querySelectorAll<HTMLButtonElement>('[data-menu-trigger]')
+    .forEach((trigger) => trigger.setAttribute('aria-expanded', 'false'));
+};
+const runAction = (action: string) => {
+  const targets: Record<string, string> = {
+    'open-glb': '#glb-input',
+    'open-manifest': '#manifest-input',
+    'try-example': '#try-example',
+    'restore-draft': '#restore-draft',
+    export: '#export-manifest',
+    undo: '#undo',
+    redo: '#redo',
+    clear: '#clear-selection',
+    invert: '#invert-selection',
+    grow: '#grow-selection',
+    shrink: '#shrink-selection',
+    'save-region': '#save-region',
+    'reset-camera': '#reset-camera',
   };
+  if (action === 'toggle-inspector') {
+    document.body.classList.toggle('inspector-hidden');
+    return;
+  }
+  if (action.startsWith('mode-')) {
+    document
+      .querySelector<HTMLButtonElement>(`[data-selection-mode="${action.slice(5)}"]`)
+      ?.click();
+    return;
+  }
+  const target = targets[action];
+  if (target) document.querySelector<HTMLElement>(target)?.click();
+};
+document.querySelectorAll<HTMLButtonElement>('[data-menu-trigger]').forEach((trigger) => {
+  trigger.onclick = (event) => {
+    event.stopPropagation();
+    const menu = document.querySelector<HTMLElement>(
+      `[data-menu="${trigger.dataset.menuTrigger}"]`,
+    )!;
+    const willOpen = menu.hidden;
+    closeMenus();
+    menu.hidden = !willOpen;
+    trigger.setAttribute('aria-expanded', String(willOpen));
+  };
+});
+document.addEventListener('click', (event) => {
+  const action = (event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset
+    .action;
+  if (action) runAction(action);
+  closeMenus();
+  $('#context-menu').hidden = true;
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeMenus();
+    $('#context-menu').hidden = true;
+  }
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
+    return;
+  const action =
+    event.key.toLowerCase() === 'b'
+      ? 'mode-brush'
+      : event.key.toLowerCase() === 'l'
+        ? 'mode-lasso'
+        : undefined;
+  if (action) runAction(action);
+});
+const contextMenu = $('#context-menu');
+renderer.domElement.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+  closeMenus();
+  const hasSelection = selectedFaceCount() > 0;
+  const hit = root ? hitAt(event) : undefined;
+  contextMenu.innerHTML = root
+    ? hasSelection
+      ? `<button role="menuitem" data-action="save-region">Create region</button><button role="menuitem" data-action="mode-connected">Select connected</button><span class="menu-divider"></span><button role="menuitem" data-action="grow">Grow selection</button><button role="menuitem" data-action="shrink">Shrink selection</button><button role="menuitem" data-action="clear">Clear selection</button>`
+      : `<button role="menuitem" data-action="${hit ? 'mode-face' : 'reset-camera'}">${hit ? 'Select face' : 'Reset camera'}</button><button role="menuitem" data-action="mode-brush">Start Brush</button><button role="menuitem" data-action="mode-lasso">Start Lasso</button>`
+    : `<button role="menuitem" data-action="open-glb">Open GLB…</button><button role="menuitem" data-action="open-manifest">Open artifact.json…</button><button role="menuitem" data-action="try-example">Try example</button>`;
+  contextMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 220)}px`;
+  contextMenu.style.top = `${Math.min(event.clientY, window.innerHeight - 210)}px`;
+  contextMenu.hidden = false;
 });
 $('#brush-radius').addEventListener('input', (event) => {
   const input = event.target as HTMLInputElement;

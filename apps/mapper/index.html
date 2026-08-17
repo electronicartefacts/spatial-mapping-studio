@@ -16,12 +16,123 @@
           <p class="eyebrow">ELECTRONIC ARTEFACTS</p>
           <h1>Spatial Mapping Studio</h1>
         </div>
-        <nav aria-label="Studio workflow" class="workflow-nav">
-          <button class="mode active" type="button"><span>01</span>Inspect</button>
-          <button class="mode" type="button"><span>02</span>Select</button>
-          <button class="mode" type="button"><span>03</span>Describe</button>
-          <button class="mode" type="button"><span>04</span>Preview</button>
-          <button class="mode" type="button"><span>05</span>Export</button>
+        <nav aria-label="Application menu" class="app-menu-bar">
+          <div class="menu-group">
+            <button
+              class="menu-trigger"
+              data-menu-trigger="file"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              File
+            </button>
+            <div class="app-menu" data-menu="file" role="menu" hidden>
+              <button role="menuitem" data-action="open-glb">
+                <span>Open GLB…</span><kbd>⌘ O</kbd>
+              </button>
+              <button role="menuitem" data-action="open-manifest">
+                <span>Open artifact.json…</span>
+              </button>
+              <button role="menuitem" data-action="try-example"><span>Try example</span></button>
+              <span class="menu-divider" role="separator"></span>
+              <button role="menuitem" data-action="restore-draft">
+                <span>Restore local draft</span>
+              </button>
+              <button role="menuitem" data-action="export">
+                <span>Export artifact.json</span><kbd>⌘ E</kbd>
+              </button>
+            </div>
+          </div>
+          <div class="menu-group">
+            <button
+              class="menu-trigger"
+              data-menu-trigger="edit"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              Edit
+            </button>
+            <div class="app-menu" data-menu="edit" role="menu" hidden>
+              <button role="menuitem" data-action="undo"><span>Undo</span><kbd>⌘ Z</kbd></button>
+              <button role="menuitem" data-action="redo"><span>Redo</span><kbd>⇧ ⌘ Z</kbd></button>
+              <span class="menu-divider" role="separator"></span>
+              <button role="menuitem" data-action="clear">
+                <span>Clear selection</span><kbd>Esc</kbd>
+              </button>
+              <button role="menuitem" data-action="invert"><span>Invert selection</span></button>
+            </div>
+          </div>
+          <div class="menu-group">
+            <button
+              class="menu-trigger"
+              data-menu-trigger="select"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              Select
+            </button>
+            <div class="app-menu" data-menu="select" role="menu" hidden>
+              <button role="menuitem" data-action="mode-face">
+                <span>◇ Face</span><kbd>1</kbd>
+              </button>
+              <button role="menuitem" data-action="mode-mesh">
+                <span>▧ Mesh</span><kbd>2</kbd>
+              </button>
+              <button role="menuitem" data-action="mode-primitive">
+                <span>◉ Primitive</span><kbd>3</kbd>
+              </button>
+              <button role="menuitem" data-action="mode-material">
+                <span>◌ Material</span><kbd>4</kbd>
+              </button>
+              <button role="menuitem" data-action="mode-connected">
+                <span>⌁ Connected</span><kbd>5</kbd>
+              </button>
+              <span class="menu-divider" role="separator"></span>
+              <button role="menuitem" data-action="mode-brush">
+                <span>╱ Brush</span><kbd>B</kbd>
+              </button>
+              <button role="menuitem" data-action="mode-lasso">
+                <span>◌ Lasso</span><kbd>L</kbd>
+              </button>
+              <span class="menu-divider" role="separator"></span>
+              <button role="menuitem" data-action="grow">
+                <span>Grow selection</span><kbd>]</kbd>
+              </button>
+              <button role="menuitem" data-action="shrink">
+                <span>Shrink selection</span><kbd>[</kbd>
+              </button>
+            </div>
+          </div>
+          <div class="menu-group">
+            <button
+              class="menu-trigger"
+              data-menu-trigger="view"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              View
+            </button>
+            <div class="app-menu" data-menu="view" role="menu" hidden>
+              <button role="menuitem" data-action="reset-camera"><span>Reset camera</span></button>
+              <button role="menuitem" data-action="toggle-inspector">
+                <span>Toggle inspector</span>
+              </button>
+            </div>
+          </div>
+          <div class="menu-group">
+            <button
+              class="menu-trigger"
+              data-menu-trigger="window"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              Window
+            </button>
+            <div class="app-menu" data-menu="window" role="menu" hidden>
+              <button role="menuitem" data-action="toggle-inspector"><span>Inspector</span></button>
+              <button role="menuitem" data-action="restore-draft"><span>Local draft</span></button>
+            </div>
+          </div>
         </nav>
         <div class="header-status">
           <span id="active-tool-caption">Face selection</span>
@@ -110,7 +221,9 @@
             <span id="selection-stats">0 targets · 0% of targeted primitives</span>
           </div>
           <div class="selection-actions">
-            <button id="clear-selection" aria-label="Clear selection" title="Clear selection">Clear</button>
+            <button id="clear-selection" aria-label="Clear selection" title="Clear selection">
+              Clear
+            </button>
             <button id="invert-selection" title="Invert selection">Invert</button>
             <button id="grow-selection" title="Grow selection" disabled>Grow</button>
             <button id="shrink-selection" title="Shrink selection" disabled>Shrink</button>
@@ -134,6 +247,12 @@
           <p id="status" role="status">Drop a GLB into the stage, or open a file.</p>
         </section>
         <aside class="inspector" aria-label="Model and region inspector">
+          <div class="inspector-header">
+            <span>Inspector</span
+            ><button class="inspector-close" data-action="toggle-inspector" title="Hide inspector">
+              ×<span class="sr-only">Hide inspector</span>
+            </button>
+          </div>
           <section id="model-info" hidden aria-label="Imported model information">
             <p class="panel-kicker">MODEL</p>
             <p id="model-summary"></p>
@@ -154,6 +273,7 @@
           </section>
         </aside>
       </section>
+      <div id="context-menu" class="context-menu" role="menu" hidden></div>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
