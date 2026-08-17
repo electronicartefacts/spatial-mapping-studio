@@ -483,6 +483,22 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   if (hit) queueBrushCandidates(hit.primitive, event);
 });
 renderer.domElement.addEventListener('pointermove', (event) => {
+  const cursor = $('#cursor-hud');
+  const rect = viewport.getBoundingClientRect();
+  cursor.hidden = false;
+  cursor.style.left = `${event.clientX - rect.left}px`;
+  cursor.style.top = `${event.clientY - rect.top}px`;
+  const title = cursor.querySelector('strong')!;
+  const detail = cursor.querySelector('span')!;
+  title.textContent = selectionMode.toUpperCase();
+  detail.textContent =
+    selectionMode === 'lasso'
+      ? 'Draw a closed area'
+      : selectionMode === 'brush'
+        ? 'Paint surfaces'
+        : selectionMode === 'erase'
+          ? 'Remove surfaces'
+          : 'Click a surface';
   if (lassoPoints) {
     const rect = renderer.domElement.getBoundingClientRect();
     lassoPoints.push([event.clientX - rect.left, event.clientY - rect.top]);
@@ -501,7 +517,10 @@ renderer.domElement.addEventListener('pointermove', (event) => {
   brushStroke.set(hit.primitive.primitiveId, faces);
   queueBrushCandidates(hit.primitive, event);
 });
-renderer.domElement.addEventListener('pointerleave', () => ($('#brush-preview').hidden = true));
+renderer.domElement.addEventListener('pointerleave', () => {
+  $('#brush-preview').hidden = true;
+  $('#cursor-hud').hidden = true;
+});
 renderer.domElement.addEventListener('pointerup', async (event) => {
   if (lassoPoints) {
     const polygon = lassoPoints;
@@ -587,6 +606,7 @@ $('#manifest-input').addEventListener('change', async (event) => {
 document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((button) => {
   button.onclick = () => {
     selectionMode = button.dataset.selectionMode as SelectionMode;
+    document.body.dataset.tool = selectionMode;
     document.body.classList.toggle('erase-active', selectionMode === 'erase');
     document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((modeButton) => {
       modeButton.setAttribute('aria-pressed', String(modeButton === button));
