@@ -28,6 +28,7 @@
               type="file"
               accept="application/json,.json" /></label
           ><button id="reset-camera">Reset camera</button>
+          <button id="try-example" class="primary">Try example</button>
           <p id="status" role="status">Drop a GLB into the viewport, or open a file.</p>
           <section id="model-info" hidden aria-label="Imported model information">
             <h2>Model</h2>
@@ -53,6 +54,9 @@
           </div>
           <button id="grow-selection" disabled>Grow</button>
           <button id="shrink-selection" disabled>Shrink</button>
+          <label
+            >Brush radius<input id="brush-radius" type="range" min="8" max="120" value="36"
+          /></label>
           <label>ID<input id="region-id" value="region-1" /></label
           ><label>Label<input id="region-label" value="Selected surface" /></label
           ><label>Tags<input id="region-tags" placeholder="material, function" /></label>
@@ -75,6 +79,7 @@
         </aside>
         <section id="viewport" aria-label="3D GLB viewport">
           <div id="drop-hint">OPEN A GLB<br /><small>Drag a local file here</small></div>
+          <div id="brush-preview" aria-hidden="true" hidden></div>
         </section>
       </section>
     </main>

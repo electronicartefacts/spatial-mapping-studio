@@ -30,3 +30,10 @@ test('canonical Primitive and shared Material modes operate on real GLB fixtures
   await clickModel();
   await expect(page.locator('#selection-count')).toHaveText('2 selected faces');
 });
+
+test('Studio entry loads its local example without upload', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Try example' }).click();
+  await expect(page.locator('#status')).toContainText('SHA-256 fingerprint attached');
+  await expect(page.locator('#model-summary')).toContainText('2 primitives');
+});

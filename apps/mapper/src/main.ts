@@ -53,6 +53,7 @@ let projectHistory: ProjectHistory | undefined;
 let activeRegionId: string | undefined;
 let selectionMode: SelectionMode = 'face';
 let brushStroke: Map<CanonicalPrimitiveId, Set<number>> | undefined;
+let brushRadiusPx = 36;
 let raf = 0;
 
 const selectedFaceCount = () =>
@@ -283,6 +284,49 @@ function hitAt(event: PointerEvent | MouseEvent) {
   return { primitive, face: hit.faceIndex };
 }
 
+function brushFaces(
+  primitive: import('./model/ModelController').RuntimePrimitive,
+  event: PointerEvent,
+) {
+  const geometry = primitive.mesh.geometry as THREE.BufferGeometry;
+  const position = geometry.getAttribute('position');
+  const index = geometry.getIndex();
+  const rect = renderer.domElement.getBoundingClientRect();
+  const point = new THREE.Vector3();
+  const candidates: number[] = [];
+  for (let face = 0; face < Math.floor((index?.count ?? position.count) / 3); face += 1) {
+    point.set(0, 0, 0);
+    for (let offset = 0; offset < 3; offset += 1) {
+      const vertex = index ? index.getX(face * 3 + offset) : face * 3 + offset;
+      point.add(
+        new THREE.Vector3(position.getX(vertex), position.getY(vertex), position.getZ(vertex)),
+      );
+    }
+    point
+      .multiplyScalar(1 / 3)
+      .applyMatrix4(primitive.mesh.matrixWorld)
+      .project(camera);
+    const x = rect.left + ((point.x + 1) / 2) * rect.width;
+    const y = rect.top + ((1 - point.y) / 2) * rect.height;
+    if (Math.hypot(event.clientX - x, event.clientY - y) <= brushRadiusPx) candidates.push(face);
+  }
+  return candidates;
+}
+
+function updateBrushPreview(event: PointerEvent) {
+  const preview = $('#brush-preview');
+  if (selectionMode !== 'brush' && selectionMode !== 'erase') {
+    preview.hidden = true;
+    return;
+  }
+  const rect = viewport.getBoundingClientRect();
+  preview.hidden = false;
+  preview.style.left = `${event.clientX - rect.left}px`;
+  preview.style.top = `${event.clientY - rect.top}px`;
+  preview.style.width = `${brushRadiusPx * 2}px`;
+  preview.style.height = `${brushRadiusPx * 2}px`;
+}
+
 function pick(event: MouseEvent) {
   const hit = hitAt(event);
   if (!hit) return;
@@ -304,16 +348,18 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   brushStroke = new Map();
   renderer.domElement.setPointerCapture(event.pointerId);
   const hit = hitAt(event);
-  if (hit) brushStroke.set(hit.primitive.primitiveId, new Set([hit.face]));
+  if (hit) brushStroke.set(hit.primitive.primitiveId, new Set(brushFaces(hit.primitive, event)));
 });
 renderer.domElement.addEventListener('pointermove', (event) => {
+  updateBrushPreview(event);
   if (!brushStroke) return;
   const hit = hitAt(event);
   if (!hit) return;
   const faces = brushStroke.get(hit.primitive.primitiveId) ?? new Set<number>();
-  faces.add(hit.face);
+  brushFaces(hit.primitive, event).forEach((face) => faces.add(face));
   brushStroke.set(hit.primitive.primitiveId, faces);
 });
+renderer.domElement.addEventListener('pointerleave', () => ($('#brush-preview').hidden = true));
 renderer.domElement.addEventListener('pointerup', (event) => {
   if (!brushStroke) return;
   if (modelController.model)
@@ -348,10 +394,14 @@ $('#manifest-input').addEventListener('change', async (event) => {
 document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((button) => {
   button.onclick = () => {
     selectionMode = button.dataset.selectionMode as SelectionMode;
+    document.body.classList.toggle('erase-active', selectionMode === 'erase');
     document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((modeButton) => {
       modeButton.setAttribute('aria-pressed', String(modeButton === button));
     });
   };
+});
+$('#brush-radius').addEventListener('input', (event) => {
+  brushRadiusPx = Number((event.target as HTMLInputElement).value);
 });
 $('#grow-selection').onclick = () => {
   if (modelController.model) selectionController.grow(modelController.model.runtime);
@@ -360,6 +410,17 @@ $('#shrink-selection').onclick = () => {
   if (modelController.model) selectionController.shrink(modelController.model.runtime);
 };
 $('#reset-camera').onclick = frame;
+$('#try-example').onclick = async () => {
+  try {
+    const response = await fetch(new URL('examples/shared-material.glb', document.baseURI));
+    if (!response.ok) throw new Error('Example is unavailable.');
+    await open(
+      new File([await response.blob()], 'shared-material.glb', { type: 'model/gltf-binary' }),
+    );
+  } catch {
+    status.textContent = 'The local example could not be loaded.';
+  }
+};
 $('#clear-selection').onclick = () => selectionController.clear();
 undoButton.onclick = () => {
   projectHistory?.undo();

@@ -20,6 +20,7 @@ examples/local-datasets/
 datasets/
 private/
 local-assets/
+benchmarks/local/
 *.glb
 !examples/mapped-object/model.glb
 !examples/conformance/model.glb

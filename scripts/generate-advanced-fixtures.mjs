@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const output = resolve(import.meta.dirname, '../examples/runtime-fixtures');
+const publicOutput = resolve(import.meta.dirname, '../apps/mapper/public/examples');
 const pad = (buffer, alignment = 4, value = 0) =>
   Buffer.concat([
     buffer,
@@ -72,8 +73,11 @@ const fixture = async (name, primitiveMaterials) => {
   const binHeader = Buffer.alloc(8);
   binHeader.writeUInt32LE(binary.length, 0);
   binHeader.writeUInt32LE(0x004e4942, 4);
-  await writeFile(resolve(output, name), Buffer.concat([header, json, binHeader, binary]));
+  const bytes = Buffer.concat([header, json, binHeader, binary]);
+  await writeFile(resolve(output, name), bytes);
+  await writeFile(resolve(publicOutput, name), bytes);
 };
 await mkdir(output, { recursive: true });
+await mkdir(publicOutput, { recursive: true });
 await fixture('multi-primitive.glb', [0, 1]);
 await fixture('shared-material.glb', [0, 0]);

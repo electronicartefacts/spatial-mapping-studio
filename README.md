@@ -4,6 +4,12 @@
 
 Spatial Mapping Studio is an open-source, browser-native, local-first authoring tool for **Spatial Artefacts**: a standard GLB plus a portable semantic manifest. No account, upload, server, or cloud dependency is required.
 
+## Use it online
+
+**[Try Spatial Mapping Studio](https://electronicartefacts.github.io/spatial-mapping-studio/)**
+
+Open a local GLB or load the included example directly in the browser. Your files stay on your device. `v0.1.0` remains the stable released baseline; `main` tracks current V0.2 development.
+
 ## What it is
 
 Open a GLB, select triangles, name and tag a region, then export `artifact.json`. The paired Spatial Viewer resolves the regions at hover and click time. Your files stay on your device.

@@ -1,4 +1,4 @@
-name: Deploy demo to GitHub Pages
+name: Deploy Spatial Mapping Studio to GitHub Pages
 on:
   push:
     branches: [main]
@@ -22,11 +22,11 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @electronic-artefacts/demo-vanilla build
+      - run: pnpm validate
       - uses: actions/configure-pages@v5
         with:
           enablement: true
       - uses: actions/upload-pages-artifact@v3
-        with: { path: apps/demo-vanilla/dist }
+        with: { path: apps/mapper/dist }
       - id: deployment
         uses: actions/deploy-pages@v4

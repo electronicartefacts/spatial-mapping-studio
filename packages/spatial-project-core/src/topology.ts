@@ -20,15 +20,14 @@ export function createTopologyIndex(triangles: readonly (readonly string[])[]): 
       edges.set(edge, [...(edges.get(edge) ?? []), triangleIndex]);
     }
   });
+  const boundary = triangles.map(() => false);
   edges.forEach((owners) => {
+    if (owners.length === 1 && owners[0] !== undefined) boundary[owners[0]] = true;
     if (owners.length < 2) return;
     owners.forEach((owner) =>
       owners.forEach((other) => owner !== other && neighbors[owner]?.add(other)),
     );
   });
-  const boundary = triangles.map((_, triangle) =>
-    [...edges.values()].some((owners) => owners.length === 1 && owners[0] === triangle),
-  );
   return {
     triangleCount: triangles.length,
     neighbors: neighbors.map((items) => [...items].sort((a, b) => a - b)),

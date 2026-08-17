@@ -12,6 +12,7 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:e2e": "playwright test",
+    "benchmark": "pnpm --filter @electronic-artefacts/spatial-project-core build && node scripts/benchmark.mjs",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "validate": "pnpm lint && pnpm format:check && pnpm test && pnpm build",
