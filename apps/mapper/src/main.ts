@@ -1,27 +1,42 @@
-import { downloadJson, parseTags } from '@electronic-artefacts/shared';
+import { downloadJson, parseTags, sha256 } from '@electronic-artefacts/shared';
 import {
   parseSpatialArtefact,
   type SpatialArtefact,
   type SpatialRegion,
 } from '@electronic-artefacts/spatial-artefact-schema';
+import {
+  ProjectHistory,
+  commands,
+  compileSpatialArtefact,
+  createWorkspaceProject,
+  deserializeWorkspaceProject,
+  serializeWorkspaceProject,
+} from '@electronic-artefacts/spatial-project-core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { sha256 } from '@electronic-artefacts/shared';
+import { ModelController } from './model/ModelController';
+import { SelectionController, type SelectionMode } from './selection/SelectionController';
+import type { CanonicalPrimitiveId } from '@electronic-artefacts/spatial-importers';
+import { SelectionOverlayRenderer } from './selection/SelectionOverlayRenderer';
 import './style.css';
 
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
-const viewport = $('#viewport'),
-  status = $('#status'),
-  hint = $('#drop-hint'),
-  list = $('#regions'),
-  selectedCount = $('#selection-count');
-const scene = new THREE.Scene(),
-  camera = new THREE.PerspectiveCamera(45, 1, 0.01, 1000),
-  renderer = new THREE.WebGLRenderer({ antialias: true }),
-  controls = new OrbitControls(camera, renderer.domElement),
-  raycaster = new THREE.Raycaster(),
-  pointer = new THREE.Vector2();
+const viewport = $('#viewport');
+const status = $('#status');
+const hint = $('#drop-hint');
+const list = $('#regions');
+const selectedCount = $('#selection-count');
+const undoButton = $('#undo') as HTMLButtonElement;
+const redoButton = $('#redo') as HTMLButtonElement;
+const inspector = $('#region-inspector');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+const controls = new OrbitControls(camera, renderer.domElement);
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const overlayRenderer = new SelectionOverlayRenderer();
+const modelController = new ModelController();
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 viewport.append(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x252832, 2));
@@ -29,31 +44,67 @@ const light = new THREE.DirectionalLight(0xffffff, 2);
 light.position.set(3, 4, 2);
 scene.add(light);
 controls.enableDamping = true;
-let root: THREE.Object3D | undefined,
-  objectUrl: string | undefined,
-  modelName = 'model.glb',
-  payloadHash: string | undefined,
-  regions: SpatialRegion[] = [],
-  selectionMeshes: THREE.Mesh[] = [],
-  raf = 0;
-const selection = new Map<THREE.Mesh, Set<number>>();
+
+let root: THREE.Object3D | undefined;
+let objectUrl: string | undefined;
+let payloadHash: string | undefined;
+let regions: SpatialRegion[] = [];
+let projectHistory: ProjectHistory | undefined;
+let activeRegionId: string | undefined;
+let selectionMode: SelectionMode = 'face';
+let brushStroke: Map<CanonicalPrimitiveId, Set<number>> | undefined;
+let brushRadiusPx = 36;
+let raf = 0;
+
+const selectedFaceCount = () =>
+  selectionController.active()?.targets.reduce((total, target) => total + target.faces.length, 0) ??
+  0;
+const selectionController = new SelectionController(
+  () => projectHistory,
+  () => syncProject(),
+);
+
+function syncSelectionVisuals() {
+  const count = selectedFaceCount();
+  overlayRenderer.rebuild(modelController.model?.runtime, selectionController.active());
+  selectedCount.textContent = `${count} selected faces`;
+  selectedCount.dataset.faces = String(count);
+  render();
+}
+
+function syncProject() {
+  if (!projectHistory) return;
+  regions = projectHistory.project.regions;
+  renderRegions();
+  syncSelectionVisuals();
+  undoButton.disabled = !projectHistory.canUndo;
+  redoButton.disabled = !projectHistory.canRedo;
+  localStorage.setItem(
+    'spatial-mapping-studio:workspace-project',
+    serializeWorkspaceProject(projectHistory.project),
+  );
+}
+
 function render() {
-  if (!raf)
+  if (!raf) {
     raf = requestAnimationFrame(() => {
       raf = 0;
       controls.update();
       renderer.render(scene, camera);
     });
+  }
 }
 controls.addEventListener('change', render);
+
 function resize() {
-  const { clientWidth: w, clientHeight: h } = viewport;
-  camera.aspect = w / h;
+  const { clientWidth: width, clientHeight: height } = viewport;
+  camera.aspect = width / height;
   camera.updateProjectionMatrix();
-  renderer.setSize(w, h, false);
+  renderer.setSize(width, height, false);
   render();
 }
 new ResizeObserver(resize).observe(viewport);
+
 function frame() {
   if (!root) return;
   const sphere = new THREE.Box3().setFromObject(root).getBoundingSphere(new THREE.Sphere());
@@ -64,104 +115,146 @@ function frame() {
   controls.update();
   render();
 }
-function clearSelection() {
-  selection.clear();
-  selectionMeshes.forEach((mesh) => {
-    mesh.removeFromParent();
-    mesh.geometry.dispose();
-    (mesh.material as THREE.Material).dispose();
-  });
-  selectionMeshes = [];
-  selectedCount.textContent = '0 selected faces';
-  render();
+
+function editRegion(region: SpatialRegion) {
+  activeRegionId = region.id;
+  inspector.hidden = false;
+  $<HTMLInputElement>('#edit-region-id').value = region.id;
+  $<HTMLInputElement>('#edit-region-label').value = region.label;
+  $<HTMLInputElement>('#edit-region-tags').value = region.tags.join(', ');
 }
-function showFace(mesh: THREE.Mesh, face: number) {
-  const geo = mesh.geometry as THREE.BufferGeometry,
-    pos = geo.getAttribute('position'),
-    idx = geo.getIndex(),
-    data: number[] = [];
-  for (let p = 0; p < 3; p++) {
-    const i = idx ? idx.getX(face * 3 + p) : face * 3 + p;
-    data.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+
+function commitRegionMetadata() {
+  if (!projectHistory || !activeRegionId) return;
+  const id = $<HTMLInputElement>('#edit-region-id').value.trim();
+  const label = $<HTMLInputElement>('#edit-region-label').value.trim();
+  if (!id || !label) return;
+  const region = regions.find((item) => item.id === activeRegionId);
+  const tags = parseTags($<HTMLInputElement>('#edit-region-tags').value);
+  if (
+    !region ||
+    (region.id === id && region.label === label && region.tags.join(',') === tags.join(','))
+  )
+    return;
+  try {
+    projectHistory.execute(commands.updateRegionMetadata(activeRegionId, { id, label, tags }));
+    activeRegionId = id;
+    syncProject();
+    status.textContent = `Updated ${label}.`;
+  } catch (error) {
+    status.textContent =
+      error instanceof Error ? error.message : 'Region metadata could not be saved.';
+    editRegion(region);
   }
-  const out = new THREE.Mesh(
-    new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(data, 3)),
-    new THREE.MeshBasicMaterial({
-      color: 0xffc400,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      transparent: true,
-      opacity: 0.82,
-    }),
-  );
-  out.renderOrder = 10;
-  mesh.add(out);
-  selectionMeshes.push(out);
 }
+
 function renderRegions() {
   list.replaceChildren(
     ...regions.map((region) => {
       const item = document.createElement('li');
-      item.textContent = `${region.label} · ${region.tags.join(', ') || 'untagged'}`;
+      const edit = document.createElement('button');
+      edit.textContent = `${region.label} · ${region.tags.join(', ') || 'untagged'}`;
+      edit.onclick = () => editRegion(region);
       const remove = document.createElement('button');
       remove.textContent = 'Remove';
       remove.onclick = () => {
-        regions = regions.filter((candidate) => candidate.id !== region.id);
-        renderRegions();
-        persistDraft();
+        projectHistory?.execute(commands.deleteRegion(region.id));
+        if (activeRegionId === region.id) {
+          activeRegionId = undefined;
+          inspector.hidden = true;
+        }
+        syncProject();
       };
-      item.append(' ', remove);
+      item.append(edit, ' ', remove);
       return item;
     }),
   );
 }
+
+function renderModelInfo() {
+  const loaded = modelController.model;
+  const info = $('#model-info');
+  const diagnostics = $('#import-diagnostics');
+  if (!loaded) {
+    info.hidden = true;
+    return;
+  }
+  info.hidden = false;
+  $('#model-summary').textContent =
+    `${loaded.canonical.source.name} · ${loaded.canonical.source.fileSize.toLocaleString()} bytes · ${loaded.canonical.nodes.length} nodes · ${loaded.canonical.meshes.length} meshes · ${loaded.canonical.primitives.length} primitives · ${loaded.canonical.materials.length} materials · SHA-256 verified`;
+  diagnostics.replaceChildren(
+    ...loaded.diagnostics.map((item) => {
+      const entry = document.createElement('li');
+      entry.textContent = `${item.level}: ${item.message}`;
+      return entry;
+    }),
+  );
+  const hasRuntimePrimitives = loaded.runtime.primitives.size > 0;
+  const hasMaterials = loaded.runtime.materials.size > 0;
+  const primitive = $<HTMLButtonElement>('[data-selection-mode="primitive"]');
+  const material = $<HTMLButtonElement>('[data-selection-mode="material"]');
+  primitive.disabled = !hasRuntimePrimitives;
+  material.disabled = !hasMaterials;
+  primitive.title = primitive.disabled
+    ? 'No canonical primitive runtime mapping is available.'
+    : '';
+  material.title = material.disabled ? 'No canonical material runtime mapping is available.' : '';
+  for (const mode of ['connected', 'brush', 'erase'] as const)
+    $<HTMLButtonElement>(`[data-selection-mode="${mode}"]`).disabled = !hasRuntimePrimitives;
+  $<HTMLButtonElement>('#grow-selection').disabled = !hasRuntimePrimitives;
+  $<HTMLButtonElement>('#shrink-selection').disabled = !hasRuntimePrimitives;
+}
+
 function currentManifest(): SpatialArtefact | undefined {
-  if (!root) return undefined;
-  return parseSpatialArtefact({
-    artifact: 'spatial',
-    specVersion: '0.1.0',
-    metadata: {
-      id: modelName.replace(/\.glb$/i, '').replace(/[^\w.-]/g, '-'),
-      title: modelName.replace(/\.glb$/i, ''),
-      triangleMapping: { finalGlb: true },
-    },
-    payload: {
-      type: 'model/gltf-binary',
-      src: './model.glb',
-      ...(payloadHash ? { integrity: { algorithm: 'sha256' as const, hash: payloadHash } } : {}),
-    },
-    regions,
-  });
+  return projectHistory ? compileSpatialArtefact(projectHistory.project) : undefined;
 }
-function persistDraft() {
-  const manifest = currentManifest();
-  if (manifest) localStorage.setItem('spatial-mapping-studio:draft', JSON.stringify(manifest));
-}
+
 function applyManifest(manifest: SpatialArtefact, source: string) {
-  regions = manifest.regions;
-  renderRegions();
+  if (projectHistory) {
+    for (const region of manifest.regions) projectHistory.execute(commands.createRegion(region));
+    syncProject();
+  }
   status.textContent = manifest.metadata.triangleMapping?.finalGlb
     ? `Loaded ${source}. Ensure it belongs to this final GLB.`
     : `Loaded ${source}. Warning: triangle stability metadata is missing.`;
 }
+
 async function open(file: File) {
   if (objectUrl) URL.revokeObjectURL(objectUrl);
   objectUrl = URL.createObjectURL(file);
-  modelName = file.name;
   status.textContent = `Loading ${file.name} locally…`;
   try {
     payloadHash = await sha256(await file.arrayBuffer());
-    const gltf = await new GLTFLoader().loadAsync(objectUrl);
-    if (root) scene.remove(root);
-    root = gltf.scene;
-    root.traverse((node) => {
-      if ((node as THREE.Mesh).isMesh && !node.name) node.name = 'Mesh_0';
-    });
+    projectHistory = new ProjectHistory(
+      createWorkspaceProject({
+        name: file.name,
+        format: 'glb',
+        mimeType: 'model/gltf-binary',
+        fileSize: file.size,
+        importerVersion: '0.1.0',
+        integrity: { algorithm: 'sha256', hash: payloadHash },
+        provenance: {
+          sourceFormat: 'glb',
+          originalFileName: file.name,
+          mimeType: file.type || 'model/gltf-binary',
+          fileSize: file.size,
+          sha256: payloadHash,
+          importedAt: new Date().toISOString(),
+          importerVersion: '0.1.0',
+        },
+      }),
+    );
+    const previous = modelController.detach();
+    if (previous) scene.remove(previous);
+    overlayRenderer.clear();
+    const loaded = await modelController.load(file, payloadHash, objectUrl);
+    root = loaded.root;
     scene.add(root);
     hint.hidden = true;
-    clearSelection();
-    regions = [];
-    renderRegions();
+    activeRegionId = undefined;
+    inspector.hidden = true;
+    syncProject();
+    renderModelInfo();
     frame();
     status.textContent =
       'Ready. SHA-256 fingerprint attached. Switch to Select and click triangles.';
@@ -170,7 +263,8 @@ async function open(file: File) {
     status.textContent = 'This GLB could not be loaded.';
   }
 }
-function pick(event: PointerEvent) {
+
+function hitAt(event: PointerEvent | MouseEvent) {
   if (!root) return;
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.set(
@@ -182,18 +276,102 @@ function pick(event: PointerEvent) {
     .intersectObject(root, true)
     .find((item) => (item.object as THREE.Mesh).isMesh);
   if (!hit || typeof hit.faceIndex !== 'number') return;
-  const mesh = hit.object as THREE.Mesh,
-    set = selection.get(mesh) ?? new Set<number>();
-  if (set.has(hit.faceIndex)) set.delete(hit.faceIndex);
-  else {
-    set.add(hit.faceIndex);
-    showFace(mesh, hit.faceIndex);
+  const primitive = modelController.model?.runtime.primitiveByObject.get(hit.object);
+  if (!primitive) {
+    status.textContent = 'This runtime mesh has no canonical GLB primitive mapping.';
+    return;
   }
-  selection.set(mesh, set);
-  selectedCount.textContent = `${[...selection.values()].reduce((total, faces) => total + faces.size, 0)} selected faces`;
-  render();
+  return { primitive, face: hit.faceIndex };
 }
-renderer.domElement.addEventListener('click', pick);
+
+function brushFaces(
+  primitive: import('./model/ModelController').RuntimePrimitive,
+  event: PointerEvent,
+) {
+  const geometry = primitive.mesh.geometry as THREE.BufferGeometry;
+  const position = geometry.getAttribute('position');
+  const index = geometry.getIndex();
+  const rect = renderer.domElement.getBoundingClientRect();
+  const point = new THREE.Vector3();
+  const candidates: number[] = [];
+  for (let face = 0; face < Math.floor((index?.count ?? position.count) / 3); face += 1) {
+    point.set(0, 0, 0);
+    for (let offset = 0; offset < 3; offset += 1) {
+      const vertex = index ? index.getX(face * 3 + offset) : face * 3 + offset;
+      point.add(
+        new THREE.Vector3(position.getX(vertex), position.getY(vertex), position.getZ(vertex)),
+      );
+    }
+    point
+      .multiplyScalar(1 / 3)
+      .applyMatrix4(primitive.mesh.matrixWorld)
+      .project(camera);
+    const x = rect.left + ((point.x + 1) / 2) * rect.width;
+    const y = rect.top + ((1 - point.y) / 2) * rect.height;
+    if (Math.hypot(event.clientX - x, event.clientY - y) <= brushRadiusPx) candidates.push(face);
+  }
+  return candidates;
+}
+
+function updateBrushPreview(event: PointerEvent) {
+  const preview = $('#brush-preview');
+  if (selectionMode !== 'brush' && selectionMode !== 'erase') {
+    preview.hidden = true;
+    return;
+  }
+  const rect = viewport.getBoundingClientRect();
+  preview.hidden = false;
+  preview.style.left = `${event.clientX - rect.left}px`;
+  preview.style.top = `${event.clientY - rect.top}px`;
+  preview.style.width = `${brushRadiusPx * 2}px`;
+  preview.style.height = `${brushRadiusPx * 2}px`;
+}
+
+function pick(event: MouseEvent) {
+  const hit = hitAt(event);
+  if (!hit) return;
+  const { primitive, face } = hit;
+  if (selectionMode === 'mesh') selectionController.selectMesh(primitive);
+  else if (selectionMode === 'primitive') selectionController.selectPrimitive(primitive);
+  else if (selectionMode === 'material')
+    selectionController.selectMaterial(primitive, modelController.model!.runtime);
+  else if (selectionMode === 'connected')
+    selectionController.selectConnected(primitive, face, modelController.model!.runtime);
+  else selectionController.selectFace(primitive, face);
+}
+
+renderer.domElement.addEventListener('click', (event) => {
+  if (selectionMode !== 'brush' && selectionMode !== 'erase') pick(event);
+});
+renderer.domElement.addEventListener('pointerdown', (event) => {
+  if (selectionMode !== 'brush' && selectionMode !== 'erase') return;
+  brushStroke = new Map();
+  renderer.domElement.setPointerCapture(event.pointerId);
+  const hit = hitAt(event);
+  if (hit) brushStroke.set(hit.primitive.primitiveId, new Set(brushFaces(hit.primitive, event)));
+});
+renderer.domElement.addEventListener('pointermove', (event) => {
+  updateBrushPreview(event);
+  if (!brushStroke) return;
+  const hit = hitAt(event);
+  if (!hit) return;
+  const faces = brushStroke.get(hit.primitive.primitiveId) ?? new Set<number>();
+  brushFaces(hit.primitive, event).forEach((face) => faces.add(face));
+  brushStroke.set(hit.primitive.primitiveId, faces);
+});
+renderer.domElement.addEventListener('pointerleave', () => ($('#brush-preview').hidden = true));
+renderer.domElement.addEventListener('pointerup', (event) => {
+  if (!brushStroke) return;
+  if (modelController.model)
+    selectionController.applyStroke(
+      modelController.model.runtime,
+      brushStroke,
+      selectionMode === 'erase',
+    );
+  brushStroke = undefined;
+  if (renderer.domElement.hasPointerCapture(event.pointerId))
+    renderer.domElement.releasePointerCapture(event.pointerId);
+});
 viewport.addEventListener('dragover', (event) => event.preventDefault());
 viewport.addEventListener('drop', (event) => {
   event.preventDefault();
@@ -213,25 +391,87 @@ $('#manifest-input').addEventListener('change', async (event) => {
     status.textContent = 'This artifact.json is invalid or unsupported.';
   }
 });
+document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((button) => {
+  button.onclick = () => {
+    selectionMode = button.dataset.selectionMode as SelectionMode;
+    document.body.classList.toggle('erase-active', selectionMode === 'erase');
+    document.querySelectorAll<HTMLButtonElement>('[data-selection-mode]').forEach((modeButton) => {
+      modeButton.setAttribute('aria-pressed', String(modeButton === button));
+    });
+  };
+});
+$('#brush-radius').addEventListener('input', (event) => {
+  brushRadiusPx = Number((event.target as HTMLInputElement).value);
+});
+$('#grow-selection').onclick = () => {
+  if (modelController.model) selectionController.grow(modelController.model.runtime);
+};
+$('#shrink-selection').onclick = () => {
+  if (modelController.model) selectionController.shrink(modelController.model.runtime);
+};
 $('#reset-camera').onclick = frame;
-$('#clear-selection').onclick = clearSelection;
+$('#try-example').onclick = async () => {
+  try {
+    const response = await fetch(new URL('examples/shared-material.glb', document.baseURI));
+    if (!response.ok) throw new Error('Example is unavailable.');
+    await open(
+      new File([await response.blob()], 'shared-material.glb', { type: 'model/gltf-binary' }),
+    );
+  } catch {
+    status.textContent = 'The local example could not be loaded.';
+  }
+};
+$('#clear-selection').onclick = () => selectionController.clear();
+undoButton.onclick = () => {
+  projectHistory?.undo();
+  syncProject();
+};
+redoButton.onclick = () => {
+  projectHistory?.redo();
+  syncProject();
+};
+document.addEventListener('keydown', (event) => {
+  if (!(event.metaKey || event.ctrlKey)) return;
+  if (event.key.toLowerCase() === 'z') {
+    event.preventDefault();
+    if (event.shiftKey) redoButton.click();
+    else undoButton.click();
+  } else if (event.key.toLowerCase() === 'y') {
+    event.preventDefault();
+    redoButton.click();
+  }
+});
+document
+  .querySelectorAll<HTMLInputElement>('#edit-region-id, #edit-region-label, #edit-region-tags')
+  .forEach((input) => {
+    input.addEventListener('blur', commitRegionMetadata);
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        input.blur();
+      }
+    });
+  });
 $('#restore-draft').onclick = () => {
-  const saved = localStorage.getItem('spatial-mapping-studio:draft');
+  const saved = localStorage.getItem('spatial-mapping-studio:workspace-project');
   if (!saved) {
     status.textContent = 'No local draft is available on this device.';
     return;
   }
   try {
-    applyManifest(parseSpatialArtefact(JSON.parse(saved)), 'local draft');
+    projectHistory = new ProjectHistory(deserializeWorkspaceProject(saved));
+    syncProject();
+    status.textContent = 'Restored local WorkspaceProject draft.';
   } catch {
-    localStorage.removeItem('spatial-mapping-studio:draft');
+    localStorage.removeItem('spatial-mapping-studio:workspace-project');
     status.textContent = 'The local draft was invalid and has been discarded.';
   }
 };
 $('#save-region').onclick = () => {
-  const id = $<HTMLInputElement>('#region-id').value.trim(),
-    label = $<HTMLInputElement>('#region-label').value.trim();
-  if (!id || !label || !selection.size) {
+  const id = $<HTMLInputElement>('#region-id').value.trim();
+  const label = $<HTMLInputElement>('#region-label').value.trim();
+  const selection = selectionController.active();
+  if (!id || !label || !selection?.targets.some((target) => target.faces.length)) {
     status.textContent = 'Select at least one face, then provide an ID and label.';
     return;
   }
@@ -239,22 +479,20 @@ $('#save-region').onclick = () => {
     status.textContent = 'Region IDs must be unique.';
     return;
   }
-  for (const [mesh, faces] of selection)
-    if (faces.size)
-      regions.push({
-        id,
+  const targets = selection.targets.filter((target) => target.faces.length);
+  for (const [index, target] of targets.entries()) {
+    if (!target.faces.length) continue;
+    projectHistory?.execute(
+      commands.createRegion({
+        id: index === 0 ? id : `${id}-${index + 1}`,
         label,
         tags: parseTags($<HTMLInputElement>('#region-tags').value),
-        selector: {
-          type: 'triangles',
-          mesh: mesh.name || 'Mesh_0',
-          faces: [...faces].sort((a, b) => a - b),
-        },
-      });
-  clearSelection();
-  renderRegions();
-  persistDraft();
-  status.textContent = `Saved ${label}.`;
+        selector: { type: 'triangles', mesh: target.mesh, faces: [...target.faces] },
+      }),
+    );
+  }
+  syncProject();
+  status.textContent = `Saved ${label}. Selection remains active for refinement.`;
 };
 $('#export-manifest').onclick = () => {
   if (!root) {

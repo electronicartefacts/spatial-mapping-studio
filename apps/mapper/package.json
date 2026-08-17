@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@electronic-artefacts/shared": "workspace:*",
+    "@electronic-artefacts/spatial-importers": "workspace:*",
+    "@electronic-artefacts/spatial-project-core": "workspace:*",
     "@electronic-artefacts/spatial-artefact-schema": "workspace:*",
     "three": "^0.172.0"
   },

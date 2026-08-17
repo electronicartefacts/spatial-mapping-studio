@@ -28,23 +28,58 @@
               type="file"
               accept="application/json,.json" /></label
           ><button id="reset-camera">Reset camera</button>
+          <button id="try-example" class="primary">Try example</button>
           <p id="status" role="status">Drop a GLB into the viewport, or open a file.</p>
+          <section id="model-info" hidden aria-label="Imported model information">
+            <h2>Model</h2>
+            <p id="model-summary"></p>
+            <ul id="import-diagnostics" aria-label="Import diagnostics"></ul>
+          </section>
           <hr />
           <h2>New region</h2>
+          <div role="group" aria-label="Selection mode" class="selection-modes">
+            <button data-selection-mode="face" aria-pressed="true">Face</button>
+            <button data-selection-mode="mesh" aria-pressed="false">Mesh</button>
+            <button data-selection-mode="primitive" aria-pressed="false" disabled>Primitive</button>
+            <button data-selection-mode="material" aria-pressed="false" disabled>Material</button>
+            <button data-selection-mode="connected" aria-pressed="false" disabled>Connected</button>
+            <button data-selection-mode="brush" aria-pressed="false" disabled>Brush</button>
+            <button data-selection-mode="erase" aria-pressed="false" disabled>Erase</button>
+            <button
+              disabled
+              title="Lasso is deferred until visible-geometry occlusion is implemented."
+            >
+              Lasso (planned)
+            </button>
+          </div>
+          <button id="grow-selection" disabled>Grow</button>
+          <button id="shrink-selection" disabled>Shrink</button>
+          <label
+            >Brush radius<input id="brush-radius" type="range" min="8" max="120" value="36"
+          /></label>
           <label>ID<input id="region-id" value="region-1" /></label
           ><label>Label<input id="region-label" value="Selected surface" /></label
           ><label>Tags<input id="region-tags" placeholder="material, function" /></label>
           <p id="selection-count">0 selected faces</p>
           <button id="clear-selection">Clear selection</button
           ><button id="save-region" class="primary">Save region</button>
+          <button id="undo" disabled>Undo</button><button id="redo" disabled>Redo</button>
           <hr />
           <h2>Regions</h2>
           <ul id="regions" aria-label="Mapped regions"></ul>
+          <section id="region-inspector" hidden aria-label="Region metadata">
+            <h2>Edit region</h2>
+            <label>ID<input id="edit-region-id" /></label>
+            <label>Label<input id="edit-region-label" /></label>
+            <label>Tags<input id="edit-region-tags" /></label>
+            <p>Changes are saved when a field loses focus or you press Enter.</p>
+          </section>
           <button id="export-manifest" class="primary">Export artifact.json</button>
           <button id="restore-draft">Restore local draft</button>
         </aside>
         <section id="viewport" aria-label="3D GLB viewport">
           <div id="drop-hint">OPEN A GLB<br /><small>Drag a local file here</small></div>
+          <div id="brush-preview" aria-hidden="true" hidden></div>
         </section>
       </section>
     </main>
