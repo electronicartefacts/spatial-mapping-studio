@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "validate": "pnpm lint && pnpm format:check && pnpm test && pnpm build",
-    "postinstall": "pnpm --filter @electronic-artefacts/spatial-artefact-schema build && pnpm --filter @electronic-artefacts/spatial-viewer build"
+    "postinstall": "pnpm --filter @electronic-artefacts/shared build && pnpm --filter @electronic-artefacts/spatial-artefact-schema build && pnpm --filter @electronic-artefacts/spatial-viewer build"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
