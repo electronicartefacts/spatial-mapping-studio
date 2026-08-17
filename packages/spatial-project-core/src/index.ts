@@ -8,10 +8,27 @@ export type ProjectSourceAsset = {
   name: string;
   format: 'glb';
   mimeType: 'model/gltf-binary';
+  fileSize?: number;
+  importerVersion?: string;
   integrity: { algorithm: 'sha256'; hash: string };
-  provenance?: { originalFileName?: string; importedAt?: string };
+  provenance?: {
+    sourceFormat?: 'glb';
+    originalFileName?: string;
+    mimeType?: string;
+    fileSize?: number;
+    sha256?: string;
+    importedAt?: string;
+    importerVersion?: string;
+  };
 };
-export type SelectionTarget = { mesh: string; primitive?: number; faces: number[] };
+export type SelectionTarget = {
+  mesh: string;
+  primitive?: number;
+  canonicalMeshId?: string;
+  canonicalPrimitiveId?: string;
+  canonicalMaterialId?: string;
+  faces: number[];
+};
 export type SelectionSet = { id: string; source: 'click' | 'manual'; targets: SelectionTarget[] };
 export type EditableRegion = SpatialRegion;
 export type WorkspaceProject = {

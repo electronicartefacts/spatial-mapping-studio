@@ -62,6 +62,9 @@ importers:
       '@electronic-artefacts/spatial-artefact-schema':
         specifier: workspace:*
         version: link:../../packages/spatial-artefact-schema
+      '@electronic-artefacts/spatial-importers':
+        specifier: workspace:*
+        version: link:../../packages/spatial-importers
       '@electronic-artefacts/spatial-project-core':
         specifier: workspace:*
         version: link:../../packages/spatial-project-core
@@ -83,6 +86,12 @@ importers:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+    devDependencies:
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/spatial-importers:
     devDependencies:
       vitest:
         specifier: ^2.1.8

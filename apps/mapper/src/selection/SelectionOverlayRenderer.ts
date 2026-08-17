@@ -1,21 +1,20 @@
 import type { SelectionSet } from '@electronic-artefacts/spatial-project-core';
 import * as THREE from 'three';
+import type { RuntimeModelMap } from '../model/ModelController';
+import type { CanonicalPrimitiveId } from '@electronic-artefacts/spatial-importers';
 
 /** Three.js-only projection of the active SelectionSet; it owns no project state. */
 export class SelectionOverlayRenderer {
   private overlays: THREE.Mesh[] = [];
 
-  rebuild(root: THREE.Object3D | undefined, selection: SelectionSet | undefined) {
+  rebuild(runtime: RuntimeModelMap | undefined, selection: SelectionSet | undefined) {
     this.clear();
-    if (!root || !selection) return;
-
-    const meshes = new Map<string, THREE.Mesh>();
-    root.traverse((object) => {
-      if ((object as THREE.Mesh).isMesh) meshes.set(object.name, object as THREE.Mesh);
-    });
+    if (!runtime || !selection) return;
 
     for (const target of selection.targets) {
-      const mesh = meshes.get(target.mesh);
+      const mesh = target.canonicalPrimitiveId
+        ? runtime.primitives.get(target.canonicalPrimitiveId as CanonicalPrimitiveId)?.mesh
+        : undefined;
       if (!mesh || !target.faces.length) continue;
       const geometry = mesh.geometry as THREE.BufferGeometry;
       const position = geometry.getAttribute('position');

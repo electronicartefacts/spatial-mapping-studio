@@ -29,23 +29,18 @@
               accept="application/json,.json" /></label
           ><button id="reset-camera">Reset camera</button>
           <p id="status" role="status">Drop a GLB into the viewport, or open a file.</p>
+          <section id="model-info" hidden aria-label="Imported model information">
+            <h2>Model</h2>
+            <p id="model-summary"></p>
+            <ul id="import-diagnostics" aria-label="Import diagnostics"></ul>
+          </section>
           <hr />
           <h2>New region</h2>
           <div role="group" aria-label="Selection mode" class="selection-modes">
             <button data-selection-mode="face" aria-pressed="true">Face</button>
             <button data-selection-mode="mesh" aria-pressed="false">Mesh</button>
-            <button
-              disabled
-              title="Primitive identity is not yet reliable across loaded GLB meshes"
-            >
-              Primitive (planned)
-            </button>
-            <button
-              disabled
-              title="Material selection is deferred until its scope is defined reliably"
-            >
-              Material (planned)
-            </button>
+            <button data-selection-mode="primitive" aria-pressed="false" disabled>Primitive</button>
+            <button data-selection-mode="material" aria-pressed="false" disabled>Material</button>
           </div>
           <label>ID<input id="region-id" value="region-1" /></label
           ><label>Label<input id="region-label" value="Selected surface" /></label

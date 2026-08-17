@@ -14,6 +14,18 @@ test('Mapper export round-trips through Spatial Viewer', async ({ page }) => {
   const canvas = page.locator('#viewport canvas'),
     box = await canvas.boundingBox();
   expect(box).not.toBeNull();
+  await expect(page.getByRole('button', { name: 'Primitive' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Primitive' }).click();
+  await page.mouse.click(box!.x + box!.width * 0.5, box!.y + box!.height * 0.5);
+  await expect(page.locator('#selection-count')).not.toHaveText('0 selected faces');
+  await page.getByRole('button', { name: 'Clear selection' }).click();
+  await expect(page.locator('#selection-count')).toHaveText('0 selected faces');
+  await expect(page.getByRole('button', { name: 'Material' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Material' }).click();
+  await page.mouse.click(box!.x + box!.width * 0.5, box!.y + box!.height * 0.5);
+  await expect(page.locator('#selection-count')).not.toHaveText('0 selected faces');
+  await page.getByRole('button', { name: 'Clear selection' }).click();
+  await page.getByRole('button', { name: 'Face' }).click();
   selectFace: for (const x of [0.3, 0.4, 0.5, 0.6, 0.7])
     for (const y of [0.3, 0.4, 0.5, 0.6, 0.7]) {
       await page.mouse.click(box!.x + box!.width * x, box!.y + box!.height * y);

@@ -5,12 +5,19 @@ import {
   type SelectionTarget,
 } from '@electronic-artefacts/spatial-project-core';
 import * as THREE from 'three';
+import type { RuntimeModelMap, RuntimePrimitive } from '../model/ModelController';
 
 export const ACTIVE_SELECTION_ID = 'active-selection';
-export type SelectionMode = 'face' | 'mesh';
+export type SelectionMode = 'face' | 'mesh' | 'primitive' | 'material';
 
-function targetFor(mesh: THREE.Mesh, faces: number[]): SelectionTarget {
-  return { mesh: mesh.name, faces };
+function targetFor(primitive: RuntimePrimitive, faces: number[]): SelectionTarget {
+  return {
+    mesh: primitive.selectorMesh,
+    canonicalMeshId: primitive.meshId,
+    canonicalPrimitiveId: primitive.primitiveId,
+    canonicalMaterialId: primitive.materialId,
+    faces,
+  };
 }
 
 function allFaces(mesh: THREE.Mesh): number[] {
@@ -26,31 +33,58 @@ export class SelectionController {
     private readonly changed: () => void,
   ) {}
 
-  selectFace(mesh: THREE.Mesh, face: number) {
+  selectFace(primitive: RuntimePrimitive, face: number) {
     const history = this.ensureActiveSelection();
     if (!history) return;
     const active = this.active();
-    const target = active?.targets.find((item) => item.mesh === mesh.name);
+    const target = active?.targets.find(
+      (item) => item.canonicalPrimitiveId === primitive.primitiveId,
+    );
     if (target?.faces.includes(face)) {
       history.execute(
-        commands.removeFacesFromSelection(ACTIVE_SELECTION_ID, targetFor(mesh, [face])),
+        commands.removeFacesFromSelection(ACTIVE_SELECTION_ID, targetFor(primitive, [face])),
       );
     } else {
-      history.execute(commands.addFacesToSelection(ACTIVE_SELECTION_ID, targetFor(mesh, [face])));
+      history.execute(
+        commands.addFacesToSelection(ACTIVE_SELECTION_ID, targetFor(primitive, [face])),
+      );
     }
     this.changed();
   }
 
-  selectMesh(mesh: THREE.Mesh) {
+  selectMesh(primitive: RuntimePrimitive) {
     const history = this.getHistory();
     if (!history) return;
     history.execute(
       commands.setSelection({
         id: ACTIVE_SELECTION_ID,
         source: 'manual',
-        targets: [targetFor(mesh, allFaces(mesh))],
+        targets: [targetFor(primitive, allFaces(primitive.mesh))],
       }),
     );
+    this.changed();
+  }
+
+  selectPrimitive(primitive: RuntimePrimitive) {
+    const history = this.getHistory();
+    if (!history) return;
+    history.execute(
+      commands.setSelection({
+        id: ACTIVE_SELECTION_ID,
+        source: 'manual',
+        targets: [targetFor(primitive, allFaces(primitive.mesh))],
+      }),
+    );
+    this.changed();
+  }
+
+  selectMaterial(primitive: RuntimePrimitive, runtime: RuntimeModelMap) {
+    const history = this.getHistory();
+    if (!history || !primitive.materialId) return;
+    const targets = [...runtime.primitives.values()]
+      .filter((item) => item.materialId === primitive.materialId)
+      .map((item) => targetFor(item, allFaces(item.mesh)));
+    history.execute(commands.setSelection({ id: ACTIVE_SELECTION_ID, source: 'manual', targets }));
     this.changed();
   }
 

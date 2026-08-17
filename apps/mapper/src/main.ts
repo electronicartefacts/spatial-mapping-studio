@@ -14,7 +14,7 @@ import {
 } from '@electronic-artefacts/spatial-project-core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { ModelController } from './model/ModelController';
 import { SelectionController, type SelectionMode } from './selection/SelectionController';
 import { SelectionOverlayRenderer } from './selection/SelectionOverlayRenderer';
 import './style.css';
@@ -35,6 +35,7 @@ const controls = new OrbitControls(camera, renderer.domElement);
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const overlayRenderer = new SelectionOverlayRenderer();
+const modelController = new ModelController();
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 viewport.append(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x252832, 2));
@@ -62,7 +63,7 @@ const selectionController = new SelectionController(
 
 function syncSelectionVisuals() {
   const count = selectedFaceCount();
-  overlayRenderer.rebuild(root, selectionController.active());
+  overlayRenderer.rebuild(modelController.model?.runtime, selectionController.active());
   selectedCount.textContent = `${count} selected faces`;
   selectedCount.dataset.faces = String(count);
   render();
@@ -167,6 +168,36 @@ function renderRegions() {
   );
 }
 
+function renderModelInfo() {
+  const loaded = modelController.model;
+  const info = $('#model-info');
+  const diagnostics = $('#import-diagnostics');
+  if (!loaded) {
+    info.hidden = true;
+    return;
+  }
+  info.hidden = false;
+  $('#model-summary').textContent =
+    `${loaded.canonical.source.name} · ${loaded.canonical.source.fileSize.toLocaleString()} bytes · ${loaded.canonical.nodes.length} nodes · ${loaded.canonical.meshes.length} meshes · ${loaded.canonical.primitives.length} primitives · ${loaded.canonical.materials.length} materials · SHA-256 verified`;
+  diagnostics.replaceChildren(
+    ...loaded.diagnostics.map((item) => {
+      const entry = document.createElement('li');
+      entry.textContent = `${item.level}: ${item.message}`;
+      return entry;
+    }),
+  );
+  const hasRuntimePrimitives = loaded.runtime.primitives.size > 0;
+  const hasMaterials = loaded.runtime.materials.size > 0;
+  const primitive = $<HTMLButtonElement>('[data-selection-mode="primitive"]');
+  const material = $<HTMLButtonElement>('[data-selection-mode="material"]');
+  primitive.disabled = !hasRuntimePrimitives;
+  material.disabled = !hasMaterials;
+  primitive.title = primitive.disabled
+    ? 'No canonical primitive runtime mapping is available.'
+    : '';
+  material.title = material.disabled ? 'No canonical material runtime mapping is available.' : '';
+}
+
 function currentManifest(): SpatialArtefact | undefined {
   return projectHistory ? compileSpatialArtefact(projectHistory.project) : undefined;
 }
@@ -192,22 +223,31 @@ async function open(file: File) {
         name: file.name,
         format: 'glb',
         mimeType: 'model/gltf-binary',
+        fileSize: file.size,
+        importerVersion: '0.1.0',
         integrity: { algorithm: 'sha256', hash: payloadHash },
-        provenance: { originalFileName: file.name, importedAt: new Date().toISOString() },
+        provenance: {
+          sourceFormat: 'glb',
+          originalFileName: file.name,
+          mimeType: file.type || 'model/gltf-binary',
+          fileSize: file.size,
+          sha256: payloadHash,
+          importedAt: new Date().toISOString(),
+          importerVersion: '0.1.0',
+        },
       }),
     );
-    const gltf = await new GLTFLoader().loadAsync(objectUrl);
-    if (root) scene.remove(root);
+    const previous = modelController.detach();
+    if (previous) scene.remove(previous);
     overlayRenderer.clear();
-    root = gltf.scene;
-    root.traverse((node) => {
-      if ((node as THREE.Mesh).isMesh && !node.name) node.name = 'Mesh_0';
-    });
+    const loaded = await modelController.load(file, payloadHash, objectUrl);
+    root = loaded.root;
     scene.add(root);
     hint.hidden = true;
     activeRegionId = undefined;
     inspector.hidden = true;
     syncProject();
+    renderModelInfo();
     frame();
     status.textContent =
       'Ready. SHA-256 fingerprint attached. Switch to Select and click triangles.';
@@ -229,9 +269,16 @@ function pick(event: PointerEvent) {
     .intersectObject(root, true)
     .find((item) => (item.object as THREE.Mesh).isMesh);
   if (!hit || typeof hit.faceIndex !== 'number') return;
-  const mesh = hit.object as THREE.Mesh;
-  if (selectionMode === 'mesh') selectionController.selectMesh(mesh);
-  else selectionController.selectFace(mesh, hit.faceIndex);
+  const primitive = modelController.model?.runtime.primitiveByObject.get(hit.object);
+  if (!primitive) {
+    status.textContent = 'This runtime mesh has no canonical GLB primitive mapping.';
+    return;
+  }
+  if (selectionMode === 'mesh') selectionController.selectMesh(primitive);
+  else if (selectionMode === 'primitive') selectionController.selectPrimitive(primitive);
+  else if (selectionMode === 'material')
+    selectionController.selectMaterial(primitive, modelController.model!.runtime);
+  else selectionController.selectFace(primitive, hit.faceIndex);
 }
 
 renderer.domElement.addEventListener('click', pick);
