@@ -1,0 +1,17 @@
+{
+  "name": "@electronic-artefacts/demo-vanilla",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@electronic-artefacts/spatial-viewer": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
+  }
+}

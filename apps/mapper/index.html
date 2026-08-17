@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Spatial Mapping Studio</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">ELECTRONIC ARTEFACTS</p>
+        <h1>SPATIAL<br />MAPPING STUDIO</h1>
+        <p>Turn surfaces into interfaces.</p>
+        <p class="promise">Your files stay on your device. <span>Open source.</span></p>
+      </header>
+      <section class="workspace">
+        <aside>
+          <nav aria-label="Authoring modes">
+            <button class="mode active">01 Inspect</button><button class="mode">02 Select</button
+            ><button class="mode">03 Describe</button><button class="mode">04 Preview</button
+            ><button class="mode">05 Export</button>
+          </nav>
+          <label class="file-button"
+            >OPEN A GLB<input id="glb-input" type="file" accept=".glb,model/gltf-binary" /></label
+          ><label class="file-button"
+            >LOAD ARTIFACT.JSON<input
+              id="manifest-input"
+              type="file"
+              accept="application/json,.json" /></label
+          ><button id="reset-camera">Reset camera</button>
+          <p id="status" role="status">Drop a GLB into the viewport, or open a file.</p>
+          <hr />
+          <h2>New region</h2>
+          <label>ID<input id="region-id" value="region-1" /></label
+          ><label>Label<input id="region-label" value="Selected surface" /></label
+          ><label>Tags<input id="region-tags" placeholder="material, function" /></label>
+          <p id="selection-count">0 selected faces</p>
+          <button id="clear-selection">Clear selection</button
+          ><button id="save-region" class="primary">Save region</button>
+          <hr />
+          <h2>Regions</h2>
+          <ul id="regions" aria-label="Mapped regions"></ul>
+          <button id="export-manifest" class="primary">Export artifact.json</button>
+          <button id="restore-draft">Restore local draft</button>
+        </aside>
+        <section id="viewport" aria-label="3D GLB viewport">
+          <div id="drop-hint">OPEN A GLB<br /><small>Drag a local file here</small></div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "artifact": "spatial",
+  "specVersion": "0.1.0",
+  "metadata": {
+    "id": "mapped-cube",
+    "title": "Mapped cube",
+    "triangleMapping": { "finalGlb": true }
+  },
+  "payload": {
+    "type": "model/gltf-binary",
+    "src": "./model.glb",
+    "integrity": {
+      "algorithm": "sha256",
+      "hash": "aa0dbb8ee7330c4410e07c112f420d4e92a7174c5321d22430a21b3ed6dbadf8"
+    }
+  },
+  "regions": [
+    {
+      "id": "front",
+      "label": "Front surface",
+      "tags": ["interface"],
+      "selector": { "type": "triangles", "mesh": "Mesh_0", "faces": [8, 9] }
+    }
+  ]
+}

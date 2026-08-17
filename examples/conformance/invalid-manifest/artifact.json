@@ -1,0 +1,7 @@
+{
+  "artifact": "spatial",
+  "specVersion": "1.0.0",
+  "metadata": { "id": "cube", "title": "Cube" },
+  "payload": { "type": "model/gltf-binary", "src": "../model.glb" },
+  "regions": []
+}

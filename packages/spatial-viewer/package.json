@@ -1,0 +1,27 @@
+{
+  "name": "@electronic-artefacts/spatial-viewer",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/spatial-viewer.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build && tsc --declaration --emitDeclarationOnly --outDir dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@electronic-artefacts/shared": "workspace:*",
+    "@electronic-artefacts/spatial-artefact-schema": "workspace:*",
+    "three": "^0.172.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
+  }
+}

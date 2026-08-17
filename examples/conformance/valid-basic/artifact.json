@@ -1,0 +1,14 @@
+{
+  "artifact": "spatial",
+  "specVersion": "0.1.0",
+  "metadata": { "id": "cube", "title": "Cube", "triangleMapping": { "finalGlb": true } },
+  "payload": { "type": "model/gltf-binary", "src": "../model.glb" },
+  "regions": [
+    {
+      "id": "front",
+      "label": "Front",
+      "tags": [],
+      "selector": { "type": "triangles", "mesh": "Mesh_0", "faces": [8, 9] }
+    }
+  ]
+}

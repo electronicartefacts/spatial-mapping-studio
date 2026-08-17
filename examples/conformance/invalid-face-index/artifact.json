@@ -1,0 +1,14 @@
+{
+  "artifact": "spatial",
+  "specVersion": "0.1.0",
+  "metadata": { "id": "cube", "title": "Cube" },
+  "payload": { "type": "model/gltf-binary", "src": "../model.glb" },
+  "regions": [
+    {
+      "id": "bad-face",
+      "label": "Bad face",
+      "tags": [],
+      "selector": { "type": "triangles", "mesh": "Mesh_0", "faces": [999] }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@electronic-artefacts/spatial-mapping-studio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@electronic-artefacts/shared": "workspace:*",
+    "@electronic-artefacts/spatial-artefact-schema": "workspace:*",
+    "three": "^0.172.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
+  }
+}

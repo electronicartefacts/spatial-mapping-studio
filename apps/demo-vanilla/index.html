@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Spatial Artefact — Vanilla demo</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <p>ELECTRONIC ARTEFACTS / SPATIAL ARTEFACT</p>
+        <h1>Mapped object</h1>
+        <p>Hover or tap the model. The semantic layer also exists as accessible DOM.</p>
+      </header>
+      <section class="layout">
+        <spatial-artefact
+          id="viewer"
+          src="./artifact/artifact.json"
+          aria-label="Interactive mapped object"
+        ></spatial-artefact>
+        <aside>
+          <p class="kicker">REGION</p>
+          <output id="detail" aria-live="polite">Explore a mapped surface.</output>
+          <h2>Regions</h2>
+          <ul id="region-list"></ul>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="/script.js"></script>
+  </body>
+</html>
